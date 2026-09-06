@@ -185,10 +185,10 @@ async function setup() {
       configured.push({ provider, tier: p.starterTier })
     } else {
       line("— Custom OpenAI-compatible endpoint —")
-      const id = (await input.ask("Short id (letters/digits/dash)", "custom")).replace(/[^a-zA-Z0-9-]/g, "-") || "custom"
-      const label = await input.ask("Label", id)
-      const baseURL = await input.ask("Base URL (…/v1)", "http://127.0.0.1:11434/v1")
-      const model = await input.ask("Model id", "llama3.1")
+      const id = (await input.ask("Provider id — one word, lowercase, used in configs", "custom")).replace(/[^a-zA-Z0-9-]/g, "-") || "custom"
+      const label = await input.ask("Display name — shown in the dashboard", id)
+      const baseURL = await input.ask("Base URL — provider's OpenAI-compatible root, ends in /v1", "http://127.0.0.1:11434/v1")
+      const model = await input.ask("Model id — exactly as the provider names it (e.g. llama3.1)", "llama3.1")
       const keyValue = await input.ask("API key (empty if the endpoint needs none)", "")
       const provider = { id, label, baseURL, adapter: "openai", quirks: [], models: [model], keys: [{ id: `${id}:key-1`, label: "Key 1" }] }
       if (keyValue) secrets.set(`${id}:key-1`, keyValue)
