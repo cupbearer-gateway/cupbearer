@@ -53,17 +53,27 @@ function extractMessage(body) {
 const RULES = [
   // --- upstream quota / budget refusals -------------------------------------
   //
-  // These say "this key has nothing left to spend", whatever the upstream's unit
-  // of account is. Cupbearer does not track currency (see health.js) — it only
-  // needs to know the key is done so the router pulls it and moves on.
+  // These say "nothing left to spend on THIS model route", whatever the
+  // upstream's unit of account is. Observed reality (agentrouter, tabitoken):
+  // the refusal is specific to the model's channel or budget pool — the same
+  // key keeps answering 200 for its other models. So quota verdicts are
+  // leg-scoped: the router pulls the failing model on this provider and moves
+  // on, while the key stays in rotation for everything else. Health tracks the
+  // per-(key, model) pull, not the key globally.
   {
     // agentrouter, observed: 402 "Budget pool quota has been exhausted."
+    // Observed at agentrouter: a 402 for ONE model while the same key kept
+    // answering 200 for every other model it serves. The budget pool is tied to
+    // the model's channel, not the credential, so this is leg-scoped: only the
+    // failing model is pulled, the key stays in rotation for the rest.
     test: (s) => /budget pool quota has been exhausted/i.test(s),
     reason: "budget_exhausted",
     keyState: "exhausted",
-    scope: "key",
+    scope: "leg",
   },
   {
+    // Same per-model budget reality as budget_exhausted: the wallet being empty
+    // for one model route must not pull the key from every pool it serves.
     test: (s) =>
       /insufficient (?:balance|credit|quota|funds)/i.test(s) ||
       /quota (?:exceeded|exhausted)/i.test(s) ||
@@ -72,7 +82,7 @@ const RULES = [
       /额度(?:不足|已用完)/.test(s), // "quota insufficient / used up"
     reason: "credit_exhausted",
     keyState: "exhausted",
-    scope: "key",
+    scope: "leg",
   },
   {
     // tabitoken, observed as a 403: "预扣费额度失败, 用户剩余额度: ＄0.401526,
@@ -87,7 +97,7 @@ const RULES = [
       /pre-?(?:charge|deduct|authorization) .*(?:failed|insufficient)/i.test(s),
     reason: "credit_exhausted",
     keyState: "exhausted",
-    scope: "key",
+    scope: "leg",
   },
 
   // --- auth -----------------------------------------------------------------
@@ -211,11 +221,13 @@ const RULES = [
     // vyce, observed in-stream after a 200: {"error":{"type":"server_error",
     // "code":"internal_error","message":"An internal error occurred..."}}.
     // Also returned as a 500 for the same prompts. Degraded, not dead — the
-    // provider works for smaller requests.
+    // provider works for smaller requests. It is also per-model (vyce serves
+    // several models; only deepseek-v4-flash errors like this), so the degraded
+    // streak counts per (key, model) and cannot pull the key's other models.
     test: (s) => /an internal error occurred/i.test(s) || /"code":\s*"internal_error"/i.test(s),
     reason: "upstream_error",
     keyState: "degraded",
-    scope: "key",
+    scope: "leg",
   },
 
   // --- our fault (mostly) ---------------------------------------------------
@@ -241,13 +253,18 @@ const RULES = [
 // -------------------------------------------------------------------- statuses
 
 function fromStatus(status) {
-  if (status === 402) return { reason: "payment_required", keyState: "exhausted", scope: "key" }
+  if (status === 402) return { reason: "payment_required", keyState: "exhausted", scope: "leg" }
   if (status === 401) return { reason: "unauthorized", keyState: "auth_failed", scope: "key" }
   if (status === 403) return { reason: "forbidden", keyState: "auth_failed", scope: "key" }
   if (status === 429) return { reason: "rate_limited", keyState: "cooling", scope: "key" }
   if (status === 404) return { reason: "not_found", keyState: "healthy", scope: "leg" }
-  if (status === 408) return { reason: "upstream_timeout", keyState: "degraded", scope: "key" }
-  if (status >= 500) return { reason: "upstream_error", keyState: "degraded", scope: "key" }
+  if (status === 408) return { reason: "upstream_timeout", keyState: "degraded", scope: "leg" }
+  // 5xx: degraded and leg-scoped. Whether the provider's whole fleet is down or
+  // just this model's backend, the other keys see the same thing (no point
+  // trying them) and per-model scoping means other models on the same key keep
+  // working. A genuinely dead provider converges: every model gets its own
+  // streak and the leg is pulled anyway.
+  if (status >= 500) return { reason: "upstream_error", keyState: "degraded", scope: "leg" }
   if (status === 400) {
     // Ambiguous: gateways use 400 both for bad requests and for billing issues.
     // Message rules above get first crack; this is the fallback. Because it is a

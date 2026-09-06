@@ -77,14 +77,14 @@ async function probeOnce({ force = false } = {}) {
     canaryStatus.totalProbed++
 
     if (out.ok) {
-      health.markSuccess(key.id, { latencyMs: out.latencyMs })
+      health.markSuccess(key.id, { latencyMs: out.latencyMs }, model)
       canaryStatus.successes++
       canaryStatus.lastResult = `OK (${out.latencyMs}ms) on ${provider.id}`
     } else {
       const verdict = classify({ status: out.status, body: out.body, error: out.error })
       // Don't pull a key for request-scoped errors on canary
       if (verdict.reason !== "context_too_long" && verdict.reason !== "content_filtered") {
-        health.markFailure(key.id, verdict)
+        health.markFailure(key.id, verdict, model)
       }
       canaryStatus.failures++
       canaryStatus.lastResult = `Fail (${verdict.reason}) on ${provider.id}`

@@ -47,14 +47,27 @@ function fakeConfig(settings = {}) {
 function fakeHealth() {
   const origSnap = health.snapshot
   const origClear = health.clear
+  const origClearKeyLevel = health.clearKeyLevel
+  const origClearModel = health.clearModel
+  // No `usable`/`modelStates` fields: a key-level sticky snapshot is enough, and
+  // the absence of modelStates must not trip the model-scoped probe path.
   health.snapshot = (id) => ({ state: id === KEY ? "auth_failed" : "healthy", sticky: id === KEY })
   health.clear = (id) => {
     cleared.push(id)
     return { state: "healthy" }
   }
+  health.clearKeyLevel = (id) => {
+    cleared.push(id)
+    return { state: "healthy" }
+  }
+  health.clearModel = (id) => {
+    cleared.push(id)
+  }
   return () => {
     health.snapshot = origSnap
     health.clear = origClear
+    health.clearKeyLevel = origClearKeyLevel
+    health.clearModel = origClearModel
   }
 }
 
@@ -95,7 +108,9 @@ test("revives a sticky key and toasts when the probe succeeds", async () => {
 
   await revive.probeOnce()
 
-  assert.deepStrictEqual(cleared, [KEY])
+  // A successful probe proves the credential (key-level clear) and the probed
+  // model route (model-scoped clear) — two distinct clears, both legitimate.
+  assert.deepStrictEqual(cleared, [KEY, KEY])
   assert.strictEqual(toasts.length, 1)
   assert.strictEqual(toasts[0].title, "Provider is back")
   assert.match(toasts[0].message, /Tabitoken/)
@@ -146,4 +161,28 @@ test("does not probe healthy keys", async () => {
 
   // justwoker's key is healthy; only the sticky tabitoken key is probed.
   assert.deepStrictEqual(probes.map((p) => p.keyId), [KEY])
+})
+
+test("revives a model-scoped pull with the exact model and keeps the key in rotation", async () => {
+  // Real health state: the key itself is healthy, only its claude-opus-5 route
+  // is exhausted (budget pool for that model empty). The probe must use that
+  // exact model, clear only that route, and leave the key-level state alone.
+  health.reset()
+  health.markFailure(KEY, { reason: "budget_exhausted", keyState: "exhausted", scope: "leg", message: "budget pool empty" }, "claude-opus-5")
+  const restores = [fakeConfig(), fakeOutbound(true), fakeNotify()]
+  test.after(() => {
+    restores.forEach((r) => r())
+    health.reset()
+    // Cancel any pending persist timer and drop the transient test entry from
+    // the real health-state file, so a fake model record never leaks to disk.
+    health.flushStickySync()
+  })
+
+  await revive.probeOnce()
+
+  assert.deepStrictEqual(probes.map((p) => p.keyId), [KEY])
+  assert.strictEqual(probes[0].model, "claude-opus-5")
+  const snap = health.snapshot(KEY)
+  assert.strictEqual(snap.state, "healthy", "key-level state must survive a model-scoped recovery")
+  assert.deepStrictEqual(snap.modelStates, [], "the revived model route must be back in rotation")
 })

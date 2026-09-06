@@ -28,7 +28,15 @@ async function probeOnce() {
   const cfg = config.load()
   if (cfg.settings.reviveProbe === false) return
 
-  // One probe per key, using the first pool model that references it.
+  // Two kinds of probe target:
+  //   key-level sticky   (auth_failed / dead credential or connection) — one
+  //                      probe per key with the first pool model that uses it.
+  //   model-scoped pull  (exhausted / unavailable / dead for ONE model) — the
+  //                      key itself may be in rotation; probe with the EXACT
+  //                      model that failed, once per (key, model).
+  // A restored route is cleared per model (health.clearModel), never via the
+  // full key clear, so a successful probe of one route cannot resurrect other
+  // routes that are still genuinely out.
   const targets = new Map()
   const maxPerTick = cfg.settings.reviveMaxPerTick || 20
 
@@ -37,10 +45,19 @@ async function probeOnce() {
       const provider = config.getProvider(leg.providerId)
       if (!provider || provider.enabled === false) continue
       for (const key of provider.keys || []) {
-        if (!health.snapshot(key.id).sticky) continue
-        if (!targets.has(key.id) && targets.size < maxPerTick) {
-          targets.set(key.id, { pool, provider, key, model: leg.model })
-        }
+        const snap = health.snapshot(key.id)
+        const keySticky = snap.sticky && !snap.usable
+        const modelHit = snap.modelStates?.find((m) => m.model === leg.model)
+
+        const keyTarget = keySticky && !targets.has(key.id) && targets.size < maxPerTick
+        const modelTarget =
+          modelHit &&
+          (modelHit.sticky || modelHit.state === "unavailable") &&
+          !targets.has(`${key.id}@${leg.model}`) &&
+          targets.size < maxPerTick
+
+        if (keyTarget) targets.set(key.id, { provider, key, model: leg.model })
+        if (modelTarget) targets.set(`${key.id}@${leg.model}`, { provider, key, model: leg.model })
       }
     }
   }
@@ -62,10 +79,14 @@ async function probeOnce() {
       .catch(() => ({ ok: false }))
 
     if (out.ok) {
+      // A success proves the credential AND this model route are fine again.
+      // Key-level state clears only for key-level probes (which prove the
+      // credential); model-level probes clear only their own route.
+      if (targets.has(key.id)) health.clearKeyLevel(key.id)
+      health.clearModel(key.id, model)
       // Which key came back matters: after a "GonkaRouter key 2 is out of
       // quota" toast, "GonkaRouter is back" alone leaves you unsure whether
       // that key or a different one recovered.
-      health.clear(key.id)
       const list = revived.get(provider.id) ?? { provider, keys: [] }
       list.keys.push(key.label || key.id)
       revived.set(provider.id, list)

@@ -468,7 +468,10 @@ async function handle(req, res, url) {
             "concurrency_limit",
           ])
           if (KEY_LEVEL.has(verdict.reason)) {
-            health.markFailure(keyId, verdict)
+            // Model-scoped verdicts mark the (key, model) route (quota for one
+            // model must not pull the key from pools where it still works);
+            // key-scoped verdicts mark the credential itself.
+            health.markFailure(keyId, verdict, model)
           }
           json(res, 200, {
             ok: false,

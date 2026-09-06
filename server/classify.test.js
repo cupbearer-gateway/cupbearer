@@ -8,7 +8,7 @@ const { classify, cleanMessage } = require("./classify")
 // probing of the real gateways. If a gateway changes its wording, these tests
 // are where it surfaces.
 
-test("agentrouter budget pool exhausted -> exhausted, key-scoped", () => {
+test("agentrouter budget pool exhausted -> exhausted, model-scoped", () => {
   const r = classify({
     status: 402,
     body: {
@@ -22,7 +22,10 @@ test("agentrouter budget pool exhausted -> exhausted, key-scoped", () => {
   })
   assert.equal(r.reason, "budget_exhausted")
   assert.equal(r.keyState, "exhausted")
-  assert.equal(r.scope, "key")
+  // Leg-scoped: this 402 hits ONE model's budget pool while the same key keeps
+  // answering 200 for its other models (observed in live traffic). Only the
+  // (key, model) route is pulled, never the whole key.
+  assert.equal(r.scope, "leg")
   assert.equal(r.retry, true)
   assert.ok(!r.message.includes("request id"), "request id should be stripped")
 })
@@ -303,7 +306,9 @@ test("tabitoken's pre-charge hold failure is out of quota, not a rejected key", 
   })
   assert.equal(v.keyState, "exhausted")
   assert.equal(v.reason, "credit_exhausted")
-  assert.equal(v.scope, "key")
+  // Leg-scoped like budget_exhausted: the hold failed for this model route, not
+  // for everything the key serves.
+  assert.equal(v.scope, "leg")
 })
 
 test("a full request queue cools the key instead of killing it", () => {

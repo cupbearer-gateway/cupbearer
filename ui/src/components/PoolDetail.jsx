@@ -62,6 +62,20 @@ function KeyRow({ providerId, k, onChanged, testModel, index = 0 }) {
             back in {Math.ceil(k.cooldownRemainingMs / 1000)}s
           </div>
         )}
+        {k.modelStates?.length > 0 && (
+          <div className="mt-1 space-y-0.5">
+            {k.modelStates.map((ms) => (
+              <div
+                key={ms.model}
+                className="truncate text-[10px]"
+                style={{ color: ms.state === "unavailable" ? "var(--color-warn)" : "var(--color-bad)" }}
+                title={`${reasonLabel(ms.reason)} — ${ms.message}`}
+              >
+                {ms.model.split("/").pop()} · {reasonLabel(ms.reason)}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="tnum col-span-1 text-right text-[var(--color-ink-soft)]">{compact(k.calls)}</div>
