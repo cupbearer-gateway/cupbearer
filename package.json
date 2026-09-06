@@ -1,6 +1,6 @@
 {
   "name": "cupbearer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The local LLM gateway that never hands your task to a model that can't handle it. One OpenAI-compatible endpoint over your own free-tier and paid provider keys, with key pooling, failover, and quality-gated routing.",
   "license": "MIT",
   "main": "server/index.js",
