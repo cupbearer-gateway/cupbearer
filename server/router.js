@@ -843,7 +843,8 @@ async function dispatch({ pool, payload, res, signal }) {
           tokensOut: result.tokensOut,
         })
         // Shadow mode: the response is already served — evaluate after the fact
-        // and log the evidence. Never blocks; the judge runs detached.
+        // and log the evidence. Never blocks; the judge runs detached. The
+        // verdict is announced on the bus so the Stream shows LOGGED seals.
         if (gc.mode === "shadow" && !result.errored) {
           gate
             .evaluate({
@@ -857,6 +858,22 @@ async function dispatch({ pool, payload, res, signal }) {
                 requirement,
                 response: { text: result.text, toolCalls: result.toolCalls, sawToolCalls: result.sawToolCalls, finishReason: result.finishReason },
               }),
+            })
+            .then((v) => {
+              if (v.active) {
+                events.emit("gate", {
+                  poolId: pool.id,
+                  providerId: provider.id,
+                  keyId,
+                  model: leg.model,
+                  mode: v.mode,
+                  passed: v.passed,
+                  score: v.score,
+                  threshold: v.threshold,
+                  requiredTier: requirement?.requiredTier ?? null,
+                  servedTier: leg.tier ?? DEFAULT_LEG_TIER,
+                })
+              }
             })
             .catch(() => {})
         }
@@ -961,8 +978,27 @@ async function dispatch({ pool, payload, res, signal }) {
           })
         } else if (gc.mode === "shadow") {
           // Served regardless; evaluate for the evidence log. The judge may be
-          // slow, so this runs detached — never blocks the response.
-          gate.evaluate({ pool, downgrade: step.downgrade, ctx }).catch(() => {})
+          // slow, so this runs detached — never blocks the response. The
+          // verdict is announced so the Stream shows LOGGED seals.
+          gate
+            .evaluate({ pool, downgrade: step.downgrade, ctx })
+            .then((v) => {
+              if (v.active) {
+                events.emit("gate", {
+                  poolId: pool.id,
+                  providerId: provider.id,
+                  keyId,
+                  model: leg.model,
+                  mode: v.mode,
+                  passed: v.passed,
+                  score: v.score,
+                  threshold: v.threshold,
+                  requiredTier: requirement?.requiredTier ?? null,
+                  servedTier: leg.tier ?? DEFAULT_LEG_TIER,
+                })
+              }
+            })
+            .catch(() => {})
         }
       }
 
