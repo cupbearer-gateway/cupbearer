@@ -13,10 +13,10 @@
   "files": [
     "server/",
     "scripts/",
-    "ui/",
-    "docs/",
+    "dist/",
+    "README.md",
     "CHANGELOG.md",
-    "README.md"
+    "LICENSE"
   ],
   "scripts": {
     "start": "node server/index.js",
