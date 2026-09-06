@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cupbearer — the LLM gateway that never hands your task to a model that can't handle it</title>
+<meta name="description" content="One OpenAI-compatible endpoint over your own free-tier and paid LLM keys. Key pooling, failover, and quality-verified routing with logged evidence. MIT, self-hosted, BYOK." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e0f13'/%3E%3Cpath d='M16 5c-5 3.5-8 6.5-8 11 0 5.5 3.6 9.5 8 11 4.4-1.5 8-5.5 8-11 0-4.5-3-7.5-8-11z' fill='none' stroke='%237c8cff' stroke-width='2'/%3E%3Ccircle cx='16' cy='15' r='3.4' fill='%237c8cff'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg: #0e0f13; --panel: #14161c; --line: #262a34; --ink: #e9eaf0; --soft: #a2a7b8; --faint: #6b7183;
+    --accent: #7c8cff; --ok: #4ade80; --bad: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { color-scheme: dark; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header { border-bottom: 1px solid var(--line); background: rgba(14,15,19,.85); position: sticky; top: 0; backdrop-filter: blur(10px); }
+  .nav { display: flex; align-items: center; gap: 14px; height: 58px; }
+  .brand { font-weight: 650; letter-spacing: -0.01em; color: var(--ink); display: flex; align-items: center; gap: 9px; }
+  .brand svg { display: block; }
+  .nav .spacer { flex: 1; }
+  .nav a { color: var(--soft); font-size: 14px; }
+  .badge { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--soft); }
+  .hero { padding: 72px 0 40px; }
+  h1 { font-size: clamp(30px, 5.4vw, 52px); line-height: 1.08; letter-spacing: -0.025em; max-width: 820px; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .sub { margin-top: 18px; font-size: 18px; color: var(--soft); max-width: 700px; }
+  .ctas { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid var(--line); color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b0c10; }
+  .btn:hover { text-decoration: none; filter: brightness(1.08); }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; overflow-x: auto; font: 13.5px/1.55 ui-monospace, "Cascadia Code", Consolas, monospace; color: #d7dae6; }
+  pre .c { color: var(--faint); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  section { padding: 40px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 24px; letter-spacing: -0.02em; margin-bottom: 8px; }
+  h3 { font-size: 15px; margin: 18px 0 8px; color: var(--ink); }
+  .muted { color: var(--soft); font-size: 15px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin-top: 10px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--faint); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .09em; }
+  .good { color: var(--ok); font-weight: 600; }
+  .no { color: var(--bad); font-weight: 600; }
+  .placeholder { border: 1px dashed var(--line); border-radius: 14px; padding: 34px; text-align: center; color: var(--faint); font-size: 14px; }
+  footer { border-top: 1px solid var(--line); padding: 26px 0 60px; color: var(--faint); font-size: 13.5px; }
+  code.inline { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: .88em; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <span class="brand">
+      <svg width="20" height="20" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#171921"/><path d="M16 5c-5 3.5-8 6.5-8 11 0 5.5 3.6 9.5 8 11 4.4-1.5 8-5.5 8-11 0-4.5-3-7.5-8-11z" fill="none" stroke="#7c8cff" stroke-width="2"/><circle cx="16" cy="15" r="3.4" fill="#7c8cff"/></svg>
+      Cupbearer
+    </span>
+    <span class="badge">v0.1 · MIT</span>
+    <span class="spacer"></span>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#connect">Connect</a>
+    <a href="#benchmark">Benchmark</a>
+    <a href="https://github.com/cupbearer-gateway/cupbearer">GitHub</a>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <h1>The LLM gateway that <em>never hands your task to a model that can't handle it.</em></h1>
+  <p class="sub">
+    One OpenAI-compatible endpoint in front of the free-tier and paid keys you already own.
+    Key pooling, rotation, automatic failover — and quality-verified routing with the evidence to prove it.
+    Self-hosted, MIT, zero telemetry.
+  </p>
+  <div class="ctas">
+    <a class="btn primary" href="#quickstart">Get started in 30 seconds</a>
+    <a class="btn" href="https://github.com/cupbearer-gateway/cupbearer">Star on GitHub</a>
+  </div>
+</div>
+
+<section id="quickstart">
+  <h2>30-second quickstart</h2>
+  <p class="muted">Bring your own keys. Nothing leaves your machine.</p>
+  <br />
+<pre><span class="c"># install, then: pick providers, paste keys, get a starter pool</span>
+npx cupbearer setup
+npx cupbearer serve        <span class="c"># gateway on http://127.0.0.1:4143</span>
+
+curl http://127.0.0.1:4143/v1/chat/completions \
+  -H "content-type: application/json" \
+  -d '{"model":"smart","messages":[{"role":"user","content":"hello"}]}'</pre>
+</section>
+
+<section id="connect">
+  <h2>Connect the agents you already use</h2>
+  <div class="grid" style="margin-top:16px">
+    <div class="card">
+      <h3 style="margin-top:0">Claude Code</h3>
+<pre>export ANTHROPIC_BASE_URL=http://127.0.0.1:4143
+export ANTHROPIC_AUTH_TOKEN=local
+claude</pre>
+      <p class="muted" style="margin-top:10px">Cupbearer serves the Anthropic Messages API (<code class="inline">/v1/messages</code>) alongside OpenAI's.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Cursor</h3>
+<pre>Settings → Models → OpenAI
+  Base URL: http://127.0.0.1:4143/v1
+  API key:  anything
+  Model:    smart</pre>
+      <p class="muted" style="margin-top:10px">Any OpenAI-speaking tool works the same way.</p>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <h2>How quality-verified routing works</h2>
+  <p class="muted">Failover on a 500 is table stakes. Cupbearer also refuses models that <em>answer but can't do the job</em>.</p>
+  <br />
+  <div class="grid">
+    <div class="card"><strong>1 · Profile</strong><p class="muted">Every request is profiled heuristically — tools, images, size, output budget → a required quality tier and hard capabilities. $0, no added latency.</p></div>
+    <div class="card"><strong>2 · Route</strong><p class="muted">The cheapest sufficient leg of your pool serves first; stronger legs back it up. Keys rotate with real health tracking and quota awareness.</p></div>
+    <div class="card"><strong>3 · Verify</strong><p class="muted">A downgrade's response is checked <em>before the client sees a byte</em>: JSON validity, empty/refusal, looping output, truncation, tool-arg sanity — plus optional LLM-as-judge on your own keys.</p></div>
+    <div class="card"><strong>4 · Reroute or record</strong><p class="muted">Failing the bar is just another pre-commit failover. Every decision is stored in SQLite and visible in the dashboard's Quality view.</p></div>
+  </div>
+</section>
+
+<section id="benchmark">
+  <h2>The benchmark report</h2>
+  <p class="muted">One command, honest numbers — failures included, nothing cherry-picked.</p>
+<pre>npx cupbearer benchmark --pool smart --reps 5</pre>
+  <table>
+    <tr><th>Metric</th><th>Sample run¹</th></tr>
+    <tr><td>Task pass rate</td><td class="good">100.0% (12/12)</td></tr>
+    <tr><td>Cost</td><td class="good">$0.00 spent (free-tier keys)</td></tr>
+    <tr><td>Quality gate</td><td>10 downgrade attempts evaluated — 6 held, 4 blocked &amp; rerouted</td></tr>
+  </table>
+  <p class="muted" style="margin-top:10px">¹ Dry run against bundled stub providers — see the <a href="https://github.com/cupbearer-gateway/cupbearer/blob/main/docs/benchmark-example.md">full example</a> and regenerate against your own pool for real numbers.</p>
+</section>
+
+<section id="demo">
+  <h2>Demo</h2>
+  <div class="placeholder">demo GIF placeholder — dashboard showing a live gated downgrade and the quality evidence feed</div>
+</section>
+
+<section id="compare">
+  <h2>Why not a DIY config?</h2>
+  <table>
+    <tr><th></th><th>Hand-rolled LiteLLM/OpenRouter config</th><th>Cupbearer</th></tr>
+    <tr><td>Key pooling &amp; rotation</td><td class="good">yes, configured per model</td><td class="good">yes, with health states &amp; auto-revival</td></tr>
+    <tr><td>Failover on errors</td><td class="good">yes</td><td class="good">yes — deferred-commit, pre-byte only</td></tr>
+    <tr><td>Quality gate before serving</td><td class="no">no — first answer wins</td><td class="good">heuristics + optional judge, evidence logged</td></tr>
+    <tr><td>Per-request quality tiering</td><td class="no">manual model routing</td><td class="good">automatic profiling, cheapest sufficient leg</td></tr>
+    <tr><td>Decision evidence &amp; reports</td><td class="no">grep the logs</td><td class="good">SQLite + dashboard + one-command benchmark</td></tr>
+    <tr><td>Setup</td><td class="no">YAML archaeology</td><td class="good">one guided command</td></tr>
+  </table>
+  <p class="muted" style="margin-top:10px">LiteLLM is a great universal proxy — Cupbearer is the layer it doesn't have: proof that a cheaper model was actually good enough.</p>
+</section>
+
+<section id="tos">
+  <h2>BYOK, always</h2>
+  <p class="muted">
+    Cupbearer only uses keys you configure locally, talks only to the official API endpoints of the providers you choose,
+    and never transmits anything anywhere else. No bundled keys, no shared pools, no resale — use your own accounts and respect
+    your providers' terms of service.
+  </p>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span class="badge">MIT License</span> · <a href="https://github.com/cupbearer-gateway/cupbearer">GitHub</a> · <a href="https://github.com/cupbearer-gateway/cupbearer/issues">Issues</a> · built for developers and indie hackers who pool free-tier LLM keys
+  </div>
+</footer>
+</body>
+</html>

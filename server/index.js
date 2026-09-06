@@ -25,6 +25,7 @@ const canary = require("./canary")
 const events = require("./events")
 const api = require("./api")
 const surface = require("./openai-surface")
+const anthropic = require("./anthropic-surface")
 const { json, error } = require("./http-util")
 
 const MIME = {
@@ -85,6 +86,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/v1/chat/completions" || url.pathname === "/chat/completions") {
       if (req.method !== "POST") return error(res, 405, "method not allowed")
       return await surface.chatCompletions(req, res)
+    }
+    if (url.pathname === "/v1/messages") {
+      if (req.method !== "POST") return error(res, 405, "method not allowed")
+      return await anthropic.messages(req, res)
     }
 
     // ---- health check -----------------------------------------------------
