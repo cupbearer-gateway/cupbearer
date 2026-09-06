@@ -67,6 +67,8 @@ function poolView(p, { slim = false } = {}) {
       providerLabel: provider?.label || leg.providerId,
       providerEnabled: provider ? provider.enabled !== false : false,
       model: leg.model,
+      tier: leg.tier ?? null,
+      capabilities: leg.capabilities || [],
       exists: Boolean(provider),
       keys: slim ? undefined : keys,
       usableKeyCount: usableCount,
@@ -96,6 +98,15 @@ function nextKeyId(provider) {
     const id = `${provider.id}:key-${n}`
     if (!used.has(id)) return id
   }
+}
+
+// API leg payload -> stored leg. tier/capabilities are optional; when absent
+// the leg routes exactly as it did before tiered routing existed.
+function legFromApi(l) {
+  const leg = { providerId: l.providerId, model: l.model }
+  if (l.tier !== undefined) leg.tier = l.tier
+  if (Array.isArray(l.capabilities)) leg.capabilities = l.capabilities
+  return leg
 }
 
 // --------------------------------------------------------------------- routing
@@ -145,7 +156,7 @@ async function handle(req, res, url) {
           id,
           name,
           keyStrategy: body.keyStrategy || "round-robin",
-          legs: body.legs.map((l) => ({ providerId: l.providerId, model: l.model })),
+          legs: body.legs.map(legFromApi),
         })
       })
       router.resetCursors()
@@ -176,7 +187,7 @@ async function handle(req, res, url) {
         if (body.name !== undefined) p.name = String(body.name).trim()
         if (body.keyStrategy !== undefined) p.keyStrategy = body.keyStrategy
         if (Array.isArray(body.legs)) {
-          p.legs = body.legs.map((l) => ({ providerId: l.providerId, model: l.model }))
+          p.legs = body.legs.map(legFromApi)
         }
       })
       router.resetCursors()

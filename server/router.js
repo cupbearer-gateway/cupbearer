@@ -29,6 +29,18 @@ const quirks = require("./quirks")
 const upstream = require("./upstream")
 const { relay } = require("./relay")
 const { classify } = require("./classify")
+const { profileRequest } = require("./profile")
+
+// Tier-aware routing reads what the request needs (profile.js) before any
+// upstream is contacted. A bug here must never take down routing: the plan
+// just falls back to the pool's declared leg order.
+function safeProfile(payload) {
+  try {
+    return profileRequest(payload)
+  } catch {
+    return null
+  }
+}
 
 // providerId -> rotation cursor
 const cursors = new Map()
@@ -89,26 +101,51 @@ function resetCursors() {
   cursors.clear()
 }
 
-function buildPlan(pool) {
+// Legs a request may use, best-fit first. With no tiers declared anywhere this
+// is exactly the declared order — tiered routing only reorders when tiers exist.
+// Sufficient legs (tier number <= required, every capability present) come
+// first, cheapest (highest tier number) before stronger ones; everything else
+// keeps the declared order after them. `downgrade` marks legs whose tier is
+// worse than the request requires — the quality gate's business (quality/gate.js).
+const DEFAULT_LEG_TIER = 2
+
+function orderLegs(pool, requirement) {
+  const legs = pool.legs || []
+  if (!requirement || !legs.length) return legs.map((leg) => ({ leg, downgrade: false }))
+  const need = [...(requirement.capabilities || [])]
+  const sufficient = []
+  const fallback = []
+  for (const leg of legs) {
+    const tier = typeof leg.tier === "number" ? leg.tier : DEFAULT_LEG_TIER
+    const missing = need.filter((c) => !(leg.capabilities || []).includes(c))
+    if (!missing.length && tier <= requirement.requiredTier) sufficient.push({ leg, tier })
+    else fallback.push({ leg, tier })
+  }
+  // Stable sort in V8: equal tiers keep the declared order.
+  sufficient.sort((a, b) => b.tier - a.tier)
+  return [...sufficient, ...fallback].map(({ leg, tier }) => ({ leg, downgrade: tier > requirement.requiredTier }))
+}
+
+function buildPlan(pool, requirement) {
   const plan = []
-  for (const leg of pool.legs) {
+  for (const { leg, downgrade } of orderLegs(pool, requirement)) {
     const provider = config.getProvider(leg.providerId)
     if (!provider) {
-      plan.push({ leg, provider: null, skip: "provider_missing", keys: [] })
+      plan.push({ leg, provider: null, skip: "provider_missing", keys: [], downgrade })
       continue
     }
     if (!config.isProviderUsable(provider)) {
-      plan.push({ leg, provider, skip: "provider_disabled", keys: [] })
+      plan.push({ leg, provider, skip: "provider_disabled", keys: [], downgrade })
       continue
     }
     const usableKeys = orderedKeys(provider, pool.keyStrategy)
     if (!usableKeys.length) {
       const hasSecrets = (provider.keys || []).some((k) => secrets.has(k.id))
       const skipReason = hasSecrets ? "all_keys_unusable" : "no_keys"
-      plan.push({ leg, provider, skip: skipReason, keys: [] })
+      plan.push({ leg, provider, skip: skipReason, keys: [], downgrade })
       continue
     }
-    plan.push({ leg, provider, keys: usableKeys })
+    plan.push({ leg, provider, keys: usableKeys, downgrade })
   }
   return plan
 }
@@ -344,7 +381,11 @@ function notifySkippedLeg(pool, step, plan, i) {
  */
 async function dispatch({ pool, payload, res, signal }) {
   const wantsStream = payload.stream === true
-  const plan = buildPlan(pool)
+  // The direct providerId/model escape hatch means exactly what it says — no
+  // profiling, no reordering. Everything else gets a tier requirement; a
+  // profiling failure degrades to declared order rather than failing the request.
+  const requirement = pool._direct ? null : safeProfile(payload)
+  const plan = buildPlan(pool, requirement)
   const attempts = []
   let attemptCount = 0
   let triedLeg = false
@@ -779,9 +820,10 @@ async function dispatch({ pool, payload, res, signal }) {
 module.exports = {
   dispatch,
   buildPlan,
+  orderLegs,
   orderedKeys,
   resetCursors,
   // exported for tests: the notification policy is worth pinning independently
   // of a full dispatch, since it decides what interrupts the user.
-  _internals: { notifyKeySwitch, notifyProviderFailover, notifySkippedLeg, usableKeyCount },
+  _internals: { notifyKeySwitch, notifyProviderFailover, notifySkippedLeg, usableKeyCount, safeProfile, DEFAULT_LEG_TIER },
 }

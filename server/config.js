@@ -115,6 +115,9 @@ function update(mutator) {
 
 // ----------------------------------------------------------------- validation
 
+// What a pool leg may declare as a hard capability (router filters on these).
+const KNOWN_CAPABILITIES = new Set(["tools", "vision", "long-context"])
+
 function validate(cfg) {
   const errors = []
   if (!Array.isArray(cfg.providers)) errors.push("providers must be an array")
@@ -237,6 +240,17 @@ function validate(cfg) {
         errors.push(`pool ${pool.id}: leg references unknown provider ${leg.providerId}`)
       }
       if (!leg.model) errors.push(`pool ${pool.id}: leg on ${leg.providerId} missing model`)
+      if (leg.tier !== undefined && (!Number.isInteger(leg.tier) || leg.tier < 1 || leg.tier > 3)) {
+        errors.push(`pool ${pool.id}: leg tier must be an integer 1..3 (1 flagship, 2 standard, 3 light)`)
+      }
+      if (leg.capabilities !== undefined) {
+        if (!Array.isArray(leg.capabilities)) {
+          errors.push(`pool ${pool.id}: leg capabilities must be an array`)
+        } else {
+          const bad = leg.capabilities.filter((c) => !KNOWN_CAPABILITIES.has(c))
+          if (bad.length) errors.push(`pool ${pool.id}: unknown leg capability: ${bad.join(", ")}`)
+        }
+      }
     }
   }
 
