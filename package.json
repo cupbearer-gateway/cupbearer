@@ -23,7 +23,7 @@
     "serve": "node server/index.js",
     "setup": "node scripts/cli.js setup",
     "doctor": "node scripts/cli.js doctor",
-    "test": "node --test server/**/*.test.js",
+    "test": "node --test",
     "smoke": "node scripts/smoke.js",
     "benchmark": "node scripts/benchmark.js",
     "build": "npm --prefix ui run build",
