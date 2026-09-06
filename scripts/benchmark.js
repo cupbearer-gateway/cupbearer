@@ -509,7 +509,12 @@ async function main() {
   if (stopStub) await stopStub()
 }
 
-main().catch((e) => {
-  console.error("benchmark crashed:", e)
-  process.exit(1)
-})
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error("benchmark crashed:", e)
+    process.exit(1)
+  })
+}
+
+module.exports = { main, parseArgs }

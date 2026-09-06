@@ -327,6 +327,9 @@ async function main() {
       await setup()
     } else if (command === "serve" || command === "start") {
       require("../server/index.js")
+    } else if (command === "benchmark") {
+      // benchmark.js parses its own flags out of argv ("benchmark" itself is skipped)
+      require("./benchmark.js").main()
     } else if (command === "doctor") {
       await doctor()
     } else {
@@ -335,6 +338,7 @@ async function main() {
       line("  cupbearer setup    guided provider + key + pool setup")
       line("  cupbearer serve    start the gateway")
       line("  cupbearer doctor   check config, keys, and (with --probe) live upstreams")
+  line("  cupbearer benchmark  run the honest-numbers report against a pool")
       line("")
       if (!["help", "-h", "--help"].includes(command)) {
         line(`unknown command: ${command}`)
