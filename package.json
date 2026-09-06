@@ -8,7 +8,7 @@
     "cupbearer": "scripts/cli.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "files": [
     "server/",

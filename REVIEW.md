@@ -38,7 +38,7 @@ The original was already well-engineered; the rebuild's job was to make it shipp
 ## 2. How to run it end-to-end
 
 ```bash
-cd C:\Users\abdul\Projects\cupbearer
+cd C:\Users\<you>\Projects\cupbearer
 
 npm test                          # 238 unit tests, hermetic, ~15s, no keys
 npm run smoke                     # stub upstreams + real gateway: failover, streaming, headers
