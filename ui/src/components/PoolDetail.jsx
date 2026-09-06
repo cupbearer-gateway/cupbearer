@@ -305,7 +305,7 @@ export default function PoolDetail({ poolId, onBack, onEdit, onDeleted, refreshT
   async function removePool() {
     if (
       !window.confirm(
-        `Delete pool "${pool.name}" (${pool.id})? It will stop working immediately and be removed from opencode's config on the next sync.`,
+        `Delete pool "${pool.name}" (${pool.id})? It will stop working immediately for every client that calls it.`,
       )
     )
       return

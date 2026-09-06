@@ -2,22 +2,24 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import { api, subscribeEvents } from "./api.js"
 import { compact, pct, ms } from "./format.js"
 import { Button, Banner, Skeleton, Empty, Card } from "./components/ui.jsx"
-import { Logo, IconWarning, IconPool, IconServer, IconSliders, IconRail } from "./components/icons.jsx"
+import { Logo, IconWarning, IconPool, IconServer, IconSliders, IconRail, IconLayers } from "./components/icons.jsx"
 import PoolsGrid from "./components/PoolsGrid.jsx"
 import PoolDetail from "./components/PoolDetail.jsx"
 import PoolBuilder from "./components/PoolBuilder.jsx"
 import Providers from "./components/Providers.jsx"
 import Operations from "./components/Operations.jsx"
+import Quality from "./components/Quality.jsx"
 
 // ============================================================================
 // Shell: collapsible side nav, a calm top bar per view, and routing between the
-// three views. Data comes from /api/overview; SSE nudges a refetch so the UI
+// views. Data comes from /api/overview; SSE nudges a refetch so the UI
 // tracks real traffic without polling hard.
 // ============================================================================
 
 const VIEWS = [
   { name: "pools", label: "Pools", icon: IconPool },
   { name: "providers", label: "Providers", icon: IconServer },
+  { name: "quality", label: "Quality", icon: IconLayers },
   { name: "operations", label: "Operations", icon: IconSliders },
 ]
 
@@ -92,7 +94,6 @@ export default function App() {
   const [pulse, setPulse] = useState(false)
   const [builder, setBuilder] = useState({ open: false, editing: null })
   const [detailToken, setDetailToken] = useState(0)
-  const [syncing, setSyncing] = useState(false)
 
   const refetchTimer = useRef(null)
 
@@ -144,18 +145,6 @@ export default function App() {
     return () => clearInterval(t)
   }, [load])
 
-  async function syncClients() {
-    setSyncing(true)
-    try {
-      await api.syncClients()
-      await load()
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   if (error && !data) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20">
@@ -180,16 +169,6 @@ export default function App() {
   const quirks = data?.quirks ?? []
   const stats = data?.stats
   const settings = data?.settings
-
-  // Which clients are out of step with the current pools. Only installed clients
-  // count — a client that isn't on this machine is not a problem to report.
-  const CLIENT_LABEL = { zcode: "ZCode", opencode: "opencode" }
-  const lagging = Object.entries(data?.clients ?? {})
-    .filter(([, c]) => c.installed && c.restartRequired)
-    .map(([name, c]) => ({ name, label: CLIENT_LABEL[name] ?? name, ...c }))
-  const lagNames = lagging.map((c) => c.label).join(" and ")
-  const lagMissing = [...new Set(lagging.flatMap((c) => c.missing))]
-  const lagStale = [...new Set(lagging.flatMap((c) => c.stale))]
 
   const brokenPools = pools.filter((p) => p.health.usableLegs === 0)
   const deadKeys = providers.flatMap((p) =>
@@ -290,29 +269,6 @@ export default function App() {
         )}
 
         <main className="mx-auto w-full max-w-[1400px] flex-1 space-y-3 px-4 py-5 sm:px-6">
-          {lagging.length > 0 && (
-            <Banner
-              tone="info"
-              action={
-                <Button size="sm" variant="outline" onClick={syncClients} disabled={syncing}>
-                  {syncing ? "Writing…" : "Rewrite client configs"}
-                </Button>
-              }
-            >
-              {lagMissing.length > 0 ? (
-                <>
-                  {lagNames} cannot see <span className="tnum">{lagMissing.join(", ")}</span> yet — clients read their
-                  model list at startup. Rewrite the configs, then restart {lagging.length > 1 ? "them" : "it"}.
-                </>
-              ) : (
-                <>
-                  {lagNames} still lists pools that no longer exist:{" "}
-                  <span className="tnum">{lagStale.join(", ")}</span>. Rewrite the configs to clean them up.
-                </>
-              )}
-            </Banner>
-          )}
-
           {brokenPools.length > 0 && view.name !== "pool" && (
             <Banner tone="bad">
               {brokenPools.length === 1 ? (
@@ -373,8 +329,10 @@ export default function App() {
             />
           ) : view.name === "providers" ? (
             <Providers providers={providers} quirks={quirks} pools={pools} onChanged={load} />
+          ) : view.name === "quality" ? (
+            <Quality pools={pools} />
           ) : (
-            <Operations settings={settings} clients={data?.clients} onChanged={load} />
+            <Operations settings={settings} onChanged={load} />
           )}
         </main>
       </div>

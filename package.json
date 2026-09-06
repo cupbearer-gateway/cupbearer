@@ -26,7 +26,8 @@
     "test": "node --test server/**/*.test.js",
     "smoke": "node scripts/smoke.js",
     "benchmark": "node scripts/benchmark.js",
-    "build": "npm --prefix ui run build"
+    "build": "npm --prefix ui run build",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",

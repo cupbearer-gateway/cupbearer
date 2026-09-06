@@ -21,8 +21,10 @@ module.exports = {
   METRICS_DIR: path.join(ROOT, "metrics"),
   // Health state snapshot persistence for sticky states.
   HEALTH_STATE_FILE: path.join(ROOT, "health-state.json"),
-  // Prebuilt dashboard bundle.
-  UI_DIST: path.join(ROOT, "dist"),
+  // Prebuilt dashboard bundle: ships next to the server (repo checkout or
+  // published package), NOT under ROOT — a user's home install should not need
+  // a UI build step. CUPBEARER_UI_DIST overrides for unusual layouts.
+  UI_DIST: process.env.CUPBEARER_UI_DIST || path.join(__dirname, "..", "dist"),
 
   // 4141 and 4142 are commonly taken by the historical deployment and vite dev
   // servers; the default stays out of their way. Configurable, never hardcoded.

@@ -75,8 +75,11 @@ export const api = {
 
   getSettings: () => request("/api/settings"),
   updateSettings: (patch) => request("/api/settings", { method: "PUT", body: patch }),
-  syncClients: () => request("/api/clients/sync", { method: "POST" }),
-  syncOpencode: () => request("/api/opencode/sync", { method: "POST" }),
+
+  qualityDecisions: (limit = 100, pool = null) =>
+    request(`/api/quality/decisions?limit=${limit}${pool ? `&pool=${encodeURIComponent(pool)}` : ""}`),
+  qualitySummary: (windowMs = 24 * 3600 * 1000, pool = null) =>
+    request(`/api/quality/summary?window=${windowMs}${pool ? `&pool=${encodeURIComponent(pool)}` : ""}`),
 
   runRevive: () => request("/api/revive/run", { method: "POST" }),
   runCanary: () => request("/api/canary/run", { method: "POST" }),
@@ -93,7 +96,7 @@ export const api = {
  */
 export function subscribeEvents(onEvent) {
   const source = new EventSource("/api/events")
-  const types = ["attempt", "success", "failure", "pools", "providers", "opencode-config"]
+  const types = ["attempt", "success", "failure", "gate", "pools", "providers"]
   const handlers = types.map((type) => {
     const h = (e) => {
       let data = null

@@ -21,9 +21,7 @@ function Group({ title, hint, children }) {
   )
 }
 
-const CLIENT_LABEL = { zcode: "ZCode", opencode: "opencode" }
-
-export default function Operations({ settings: initialSettings, clients, onChanged }) {
+export default function Operations({ settings: initialSettings, onChanged }) {
   const [settings, setSettings] = useState(initialSettings || {})
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
@@ -135,36 +133,10 @@ export default function Operations({ settings: initialSettings, clients, onChang
             {busy === "canary" && <Spinner />}
             Check healthy keys now
           </Button>
-
-          <Button
-            variant="outline"
-            onClick={() => run("sync", () => api.syncClients(), "Client configs rewritten (ZCode + OpenCode)")}
-            disabled={busy}
-          >
-            {busy === "sync" && <Spinner />}
-            Rewrite client configs
-          </Button>
         </div>
         {canaryStatus?.lastAt && (
           <p className="text-[11px] text-[var(--color-ink-faint)]">
             Last healthy-key check: <span className="tnum">{canaryText}</span>
-          </p>
-        )}
-        {clients && (
-          <p className="text-[11px] text-[var(--color-ink-faint)]">
-            {Object.entries(clients).map(([name, c], i) => (
-              <span key={name}>
-                {i > 0 && " · "}
-                <span className="text-[var(--color-ink-dim)]">{CLIENT_LABEL[name] ?? name}</span>{" "}
-                {!c.installed ? (
-                  "not installed"
-                ) : c.restartRequired ? (
-                  <span className="tnum">{c.declared.length} pools, needs a rewrite</span>
-                ) : (
-                  <span className="tnum">{c.declared.length} pools, up to date</span>
-                )}
-              </span>
-            ))}
           </p>
         )}
       </Group>

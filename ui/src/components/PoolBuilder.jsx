@@ -409,7 +409,7 @@ export default function PoolBuilder({ open, onClose, providers, editing, onSaved
 
           <Field
             label="Model id"
-            hint="what opencode calls"
+            hint="the name clients will call"
             error={effectiveId && !/^[a-zA-Z0-9._-]+$/.test(effectiveId) ? "Letters, digits, dot, dash, underscore only" : null}
           >
             <Input
@@ -435,10 +435,10 @@ export default function PoolBuilder({ open, onClose, providers, editing, onSaved
           {effectiveId && (
             <div className="animate-slide-down rounded-[var(--radius-inner)] bg-[var(--color-base)] px-3 py-3 shadow-[inset_0_0_0_1px_var(--color-line)]">
               <div className="text-[9.5px] font-medium uppercase tracking-[0.11em] text-[var(--color-ink-faint)]">
-                You'll select this in opencode as
+                Clients will call this model
               </div>
               <code className="tnum mt-1.5 block text-[14px] text-[var(--color-accent-soft)]">
-                cupbearer/{effectiveId}
+                {effectiveId}
               </code>
             </div>
           )}
