@@ -143,7 +143,7 @@ One Node process, zero runtime dependencies (storage is `node:sqlite`, built int
 
 ## Status & roadmap
 
-v0.1 — the full gateway, gate, dashboard, and benchmark are in. Next: more presets and community quirks, LLM-assisted request profiling, multimodal passthrough endpoints, Anthropic surface tool-streaming. See [PLAN.md](PLAN.md) for the full rebuild plan and [CHANGELOG.md](CHANGELOG.md) for history.
+v0.1 — the full gateway, gate, dashboard, and benchmark are in. Next: more presets and community quirks, LLM-assisted request profiling, multimodal passthrough endpoints, Anthropic surface tool-streaming. See [CHANGELOG.md](CHANGELOG.md) for history.
 
 ## License
 
