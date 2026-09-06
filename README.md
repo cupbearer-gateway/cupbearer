@@ -10,8 +10,7 @@ MIT licensed. BYOK always: your keys stay on your machine, nothing phones home.
 
 [![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![tests](https://img.shields.io/badge/tests-238%20passing-brightgreen)]() [![Node](https://img.shields.io/badge/node-%E2%89%A522-blue)]()
 
-<!-- TODO(demo): 30-second GIF of the dashboard showing a gated downgrade — drop demo.gif here
-![Cupbearer routing a request](demo.gif) -->
+![Cupbearer — the tasting room: live verdicts, blocked downgrades, and the evidence log](docs/demo.gif)
 
 ---
 
