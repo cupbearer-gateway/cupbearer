@@ -31,49 +31,60 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* ============================================================================
-   Cupbearer design tokens
+/* The wordmark and heading voice: Fraunces is a warm, slightly wonky serif —
+   craft and vault, not SaaS. Soft optical axis reads best at display sizes. */
+@font-face {
+  font-family: "Fraunces Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
-   Near-black neutral base, one committed indigo accent with a real tint layer,
-   and semantic state colours that are distinguishable by hue AND paired with
-   shape/text in the UI so no meaning is carried by colour alone.
+/* ============================================================================
+   Cupbearer design tokens — "the vault / assay office"
+
+   Warm charcoal base (never pure black, never blue), a brass accent that
+   belongs to seals and hallmarks, and verdict colours that mean something:
+   emerald held, oxblood blocked, amber shadow-evidence. All ink tiers clear
+   WCAG AA (4.5:1) on every surface; no meaning is carried by colour alone.
    ========================================================================== */
 
 @theme {
-  /* Surfaces, darkest to lightest. */
-  --color-base: #08090a;
-  --color-surface: #0d0e10;
-  --color-raised: #131417;
-  --color-overlay: #191a1f;
-  --color-line: #23252a;
-  --color-line-strong: #34343a;
-  --color-line-bright: #3e3e44;
+  /* Surfaces, darkest to lightest — warm ramp, brown-black not blue-black. */
+  --color-base: #100f0d;
+  --color-surface: #161411;
+  --color-raised: #1c1916;
+  --color-overlay: #232019;
+  --color-line: #2b2721;
+  --color-line-strong: #3b352c;
+  --color-line-bright: #4a4237;
 
-  /* Text. Three levels, all of which clear WCAG AA (4.5:1) against every
-     surface in the ramp — this is a monitoring UI, so the tertiary tier
-     carries real numbers and cannot be decorative. */
-  --color-ink: #f7f8f8;
-  --color-ink-soft: #a3a8b2;
-  --color-ink-faint: #7b8089;
+  /* Text — warm parchment tier over the warm base. */
+  --color-ink: #f2ede3;
+  --color-ink-soft: #b0a896;
+  --color-ink-faint: #7d766a;
 
-  /* Accent, with a tint dark enough to fill against a near-black base. */
-  --color-accent: #7170ff;
-  --color-accent-soft: #9b9bff;
-  --color-accent-dim: #5e6ad2;
-  --color-accent-deep: #4a4fa8;
-  --color-accent-tint: #18182f;
+  /* Brass — the hallmark accent. Tint layer fills panels without glowing. */
+  --color-accent: #c9a227;
+  --color-accent-soft: #ddbb4e;
+  --color-accent-dim: #a3852c;
+  --color-accent-deep: #6e5a1e;
+  --color-accent-tint: #2a2313;
 
-  /* Semantic states, matched to key health. Brightened from Linear's marketing
-     values, which were tuned for large fills rather than 10px text. */
-  --color-ok: #3ecf6b;
-  --color-ok-soft: #6ee093;
-  --color-warn: #f0bf00;
-  --color-bad: #ff7b7b;
-  --color-cool: #6cb6ff;
-  --color-idle: #7b8089;
+  /* Verdicts: emerald held, oxblood blocked, amber shadow-evidence. */
+  --color-ok: #4ade80;
+  --color-ok-soft: #86efac;
+  --color-warn: #e0b354;
+  --color-bad: #e2655c;
+  --color-cool: #8ab4d8;
+  --color-idle: #7d766a;
 
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+  --font-serif: "Fraunces Variable", ui-serif, Georgia, serif;
 
   --radius-card: 0.75rem;
   --radius-inner: 0.5rem;
@@ -141,6 +152,13 @@ h1,
 h2,
 h3 {
   letter-spacing: -0.019em;
+}
+
+/* The brand voice: wordmark, page titles, seal lettering. */
+.brand-serif {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 60, "SOFT" 40;
+  letter-spacing: -0.01em;
 }
 
 /* All figures use tabular numerals so columns align down the page. */
@@ -281,6 +299,29 @@ h3 {
 }
 .animate-ping-once {
   animation: pulse-ring 1s ease-out;
+}
+
+/* The wax seal: pressed once, slightly over-rotated like a real hand stamp,
+   then still. The kernel of the Tasting Room — respect reduced-motion above. */
+@keyframes seal-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.7) rotate(-14deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.94) rotate(4deg);
+  }
+  80% {
+    transform: scale(1.03) rotate(-2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-3deg);
+  }
+}
+.seal-stamp {
+  animation: seal-stamp 0.5s var(--ease-spring) both;
 }
 
 /* Health strip segments grow out from the left rather than snapping in. */

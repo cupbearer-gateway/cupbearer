@@ -30,6 +30,7 @@ async function request(path, { method = "GET", body } = {}) {
 
 export const api = {
   overview: () => request("/api/overview"),
+  feed: (limit = 80) => request(`/api/feed?limit=${limit}`),
 
   poolDetail: (id) => request(`/api/pools/${encodeURIComponent(id)}/detail`),
   createPool: (pool) => request("/api/pools", { method: "POST", body: pool }),

@@ -63,7 +63,7 @@ function gateContext({ provider, leg, keyId, payload, requirement, response }) {
 // Shared gate-fail bookkeeping: a gated downgrade that failed evaluation is not
 // the key's fault — no health penalty, just another pre-commit failover, logged
 // everywhere. Control flow (break/return) stays at the call site.
-function recordGateFail({ pool, provider, leg, keyId, latencyMs, streamed, attempts, verdict, attemptCount }) {
+function recordGateFail({ pool, provider, leg, keyId, latencyMs, streamed, attempts, verdict, attemptCount, requirement }) {
   const message = `quality score ${typeof verdict.score === "number" ? verdict.score.toFixed(2) : verdict.score} < threshold ${verdict.threshold}`
   attempts.push({ provider: provider.id, model: leg.model, keyId, reason: "quality_gate_failed", message, score: verdict.score })
   metrics.record({
@@ -79,6 +79,9 @@ function recordGateFail({ pool, provider, leg, keyId, latencyMs, streamed, attem
     attempts: attemptCount,
     streamed,
     score: verdict.score,
+    requiredTier: requirement?.requiredTier ?? null,
+    servedTier: leg.tier ?? DEFAULT_LEG_TIER,
+    downgrade: true,
   })
   events.emit("gate", {
     poolId: pool.id,
@@ -89,6 +92,8 @@ function recordGateFail({ pool, provider, leg, keyId, latencyMs, streamed, attem
     passed: false,
     score: verdict.score,
     threshold: verdict.threshold,
+    requiredTier: requirement?.requiredTier ?? null,
+    servedTier: leg.tier ?? DEFAULT_LEG_TIER,
   })
 }
 
@@ -723,7 +728,7 @@ async function dispatch({ pool, payload, res, signal }) {
           })
           if (!verdict.passed) {
             gateFails++
-            recordGateFail({ pool, provider, leg, keyId, latencyMs: Date.now() - attemptStartedAt, streamed: true, attempts, verdict, attemptCount })
+            recordGateFail({ pool, provider, leg, keyId, latencyMs: Date.now() - attemptStartedAt, streamed: true, attempts, verdict, attemptCount, requirement })
             if (gateFails > gc.maxDowngrades) {
               return {
                 requestError: {
@@ -756,6 +761,9 @@ async function dispatch({ pool, payload, res, signal }) {
             attempts: attemptCount,
             streamed: true,
             score: verdict.score,
+            requiredTier: requirement?.requiredTier ?? null,
+            servedTier: leg.tier ?? DEFAULT_LEG_TIER,
+            downgrade: true,
           })
           events.emit("gate", {
             poolId: pool.id,
@@ -766,6 +774,8 @@ async function dispatch({ pool, payload, res, signal }) {
             passed: true,
             score: verdict.score,
             threshold: verdict.threshold,
+            requiredTier: requirement?.requiredTier ?? null,
+            servedTier: leg.tier ?? DEFAULT_LEG_TIER,
           })
           events.emit("success", {
             poolId: pool.id,
@@ -774,6 +784,9 @@ async function dispatch({ pool, payload, res, signal }) {
             model: leg.model,
             latencyMs: opened.latencyMs,
             tokensOut: result.tokensOut,
+            score: verdict.score,
+            requiredTier: requirement?.requiredTier ?? null,
+            servedTier: leg.tier ?? DEFAULT_LEG_TIER,
           })
           return { committed: true, providerId: provider.id, keyId, attempts }
         }
@@ -918,7 +931,7 @@ async function dispatch({ pool, payload, res, signal }) {
           const verdict = await gate.evaluate({ pool, downgrade: true, ctx })
           if (!verdict.passed) {
             gateFails++
-            recordGateFail({ pool, provider, leg, keyId, latencyMs: out.latencyMs, streamed: false, attempts, verdict, attemptCount })
+            recordGateFail({ pool, provider, leg, keyId, latencyMs: out.latencyMs, streamed: false, attempts, verdict, attemptCount, requirement })
             if (gateFails > gc.maxDowngrades) {
               return {
                 requestError: {
@@ -972,6 +985,9 @@ async function dispatch({ pool, payload, res, signal }) {
         attempts: attemptCount,
         streamed: false,
         score: gateScore,
+        requiredTier: requirement?.requiredTier ?? null,
+        servedTier: leg.tier ?? DEFAULT_LEG_TIER,
+        downgrade: step.downgrade,
       })
       events.emit("success", {
         poolId: pool.id,
@@ -980,6 +996,9 @@ async function dispatch({ pool, payload, res, signal }) {
         model: leg.model,
         latencyMs: out.latencyMs,
         tokensOut: usage.completion_tokens || 0,
+        score: gateScore,
+        requiredTier: requirement?.requiredTier ?? null,
+        servedTier: leg.tier ?? DEFAULT_LEG_TIER,
       })
 
       res.writeHead(200, {

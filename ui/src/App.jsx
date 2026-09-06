@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import { api, subscribeEvents } from "./api.js"
 import { compact, pct, ms } from "./format.js"
 import { Button, Banner, Skeleton, Empty, Card } from "./components/ui.jsx"
-import { Logo, IconWarning, IconPool, IconServer, IconSliders, IconRail, IconLayers } from "./components/icons.jsx"
+import { Logo, IconWarning, IconPool, IconServer, IconSliders, IconRail, IconLayers, IconClose } from "./components/icons.jsx"
 import PoolsGrid from "./components/PoolsGrid.jsx"
 import PoolDetail from "./components/PoolDetail.jsx"
 import PoolBuilder from "./components/PoolBuilder.jsx"
 import Providers from "./components/Providers.jsx"
 import Operations from "./components/Operations.jsx"
 import Quality from "./components/Quality.jsx"
+import Stream from "./components/Stream.jsx"
 
 // ============================================================================
 // Shell: collapsible side nav, a calm top bar per view, and routing between the
@@ -17,10 +18,9 @@ import Quality from "./components/Quality.jsx"
 // ============================================================================
 
 const VIEWS = [
+  { name: "stream", label: "Stream", icon: IconRail },
   { name: "pools", label: "Pools", icon: IconPool },
-  { name: "providers", label: "Providers", icon: IconServer },
-  { name: "quality", label: "Quality", icon: IconLayers },
-  { name: "operations", label: "Operations", icon: IconSliders },
+  { name: "evidence", label: "Evidence", icon: IconLayers },
 ]
 
 function LiveDot({ connected, pulse }) {
@@ -86,7 +86,7 @@ function NavItem({ active, icon: Icon, label, count, collapsed, onClick }) {
 }
 
 export default function App() {
-  const [view, setView] = useState({ name: "pools" })
+  const [view, setView] = useState({ name: "stream" })
   const [collapsed, setCollapsed] = useState(false)
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -94,6 +94,8 @@ export default function App() {
   const [pulse, setPulse] = useState(false)
   const [builder, setBuilder] = useState({ open: false, editing: null })
   const [detailToken, setDetailToken] = useState(0)
+  const [poolsTab, setPoolsTab] = useState("pools")
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const refetchTimer = useRef(null)
 
@@ -195,11 +197,11 @@ export default function App() {
               aria-label="Cupbearer home"
             >
               <Logo />
-              <span className="text-[14px] font-semibold tracking-[-0.01em]">Cupbearer</span>
+              <span className="brand-serif text-[17px] font-semibold tracking-[-0.01em]">Cupbearer</span>
             </button>
           )}
           {collapsed && (
-            <button onClick={() => setView({ name: "pools" })} aria-label="Cupbearer home" className="flex justify-center">
+            <button onClick={() => setView({ name: "stream" })} aria-label="Cupbearer home" className="flex justify-center">
               <Logo size={22} />
             </button>
           )}
@@ -221,7 +223,7 @@ export default function App() {
               active={v.name === "pools" ? view.name === "pools" || view.name === "pool" : view.name === v.name}
               icon={v.icon}
               label={v.label}
-              count={v.name === "pools" ? pools.length : v.name === "providers" ? providers.length : undefined}
+              count={v.name === "pools" ? pools.length : undefined}
               collapsed={collapsed}
               onClick={() => setView({ name: v.name })}
             />
@@ -229,6 +231,17 @@ export default function App() {
         </nav>
 
         <div className="flex-1" />
+
+        {/* Settings drawer trigger — the only way in; knobs are not a page. */}
+        <div className={`border-t border-[var(--color-line)] ${collapsed ? "px-0 py-2" : "px-2 py-2"}`}>
+          <NavItem
+            active={settingsOpen}
+            icon={IconSliders}
+            label="Settings"
+            collapsed={collapsed}
+            onClick={() => setSettingsOpen(true)}
+          />
+        </div>
 
         {/* Footer: live + today's summary */}
         <div className={`space-y-2.5 border-t border-[var(--color-line)] ${collapsed ? "px-0 py-3" : "px-3 py-3"}`}>
@@ -290,13 +303,36 @@ export default function App() {
               <Skeleton className="h-[168px]" />
               <Skeleton className="h-[168px]" />
             </div>
+          ) : view.name === "stream" ? (
+            <Stream />
           ) : view.name === "pools" ? (
             <>
-              {deadKeys.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {[
+                  { id: "pools", label: `Pools (${pools.length})` },
+                  { id: "providers", label: `Providers (${providers.length})` },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setPoolsTab(t.id)}
+                    className={`rounded-[var(--radius-inner)] px-3 py-1.5 text-[12.5px] font-medium transition-colors duration-200 ${
+                      poolsTab === t.id ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)] hover:text-[var(--color-ink-soft)]"
+                    }`}
+                    style={
+                      poolsTab === t.id
+                        ? { background: "color-mix(in oklab, var(--color-accent) 13%, transparent)", boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 30%, transparent)" }
+                        : { boxShadow: "inset 0 0 0 1px var(--color-line)" }
+                    }
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {deadKeys.length > 0 && poolsTab === "pools" && (
                 <Banner
                   tone="warn"
                   action={
-                    <Button size="sm" variant="outline" onClick={() => setView({ name: "providers" })}>
+                    <Button size="sm" variant="outline" onClick={() => setPoolsTab("providers")}>
                       Manage keys
                     </Button>
                   }
@@ -309,12 +345,16 @@ export default function App() {
                   {deadKeys.length > 3 && ` +${deadKeys.length - 3} more`}
                 </Banner>
               )}
-              <PoolsGrid
-                pools={pools}
-                onOpen={(id) => setView({ name: "pool", id })}
-                onCreate={() => setBuilder({ open: true, editing: null })}
-                onEdit={(pool) => setBuilder({ open: true, editing: pool })}
-              />
+              {poolsTab === "pools" ? (
+                <PoolsGrid
+                  pools={pools}
+                  onOpen={(id) => setView({ name: "pool", id })}
+                  onCreate={() => setBuilder({ open: true, editing: null })}
+                  onEdit={(pool) => setBuilder({ open: true, editing: pool })}
+                />
+              ) : (
+                <Providers providers={providers} quirks={quirks} pools={pools} onChanged={load} />
+              )}
             </>
           ) : view.name === "pool" ? (
             <PoolDetail
@@ -327,15 +367,38 @@ export default function App() {
                 load()
               }}
             />
-          ) : view.name === "providers" ? (
-            <Providers providers={providers} quirks={quirks} pools={pools} onChanged={load} />
-          ) : view.name === "quality" ? (
-            <Quality pools={pools} />
           ) : (
-            <Operations settings={settings} onChanged={load} />
+            <Quality pools={pools} />
           )}
         </main>
       </div>
+
+      {/* Settings drawer — knobs are a layer, not a destination. */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setSettingsOpen(false)} />
+          <aside
+            className="animate-fade relative flex h-full w-full max-w-[560px] flex-col border-l border-[var(--color-line)] bg-[var(--color-base)]"
+            role="dialog"
+            aria-label="Settings"
+          >
+            <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-[var(--color-line)] px-4">
+              <h2 className="brand-serif text-[15px] font-semibold">Settings</h2>
+              <div className="flex-1" />
+              <button
+                onClick={() => setSettingsOpen(false)}
+                aria-label="Close settings"
+                className="flex h-7 w-7 items-center justify-center rounded-[5px] text-[var(--color-ink-faint)] transition-colors hover:bg-[var(--color-raised)] hover:text-[var(--color-ink)]"
+              >
+                <IconClose size={14} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <Operations settings={settings} onChanged={load} />
+            </div>
+          </aside>
+        </div>
+      )}
 
       <PoolBuilder
         open={builder.open}
