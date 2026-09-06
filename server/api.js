@@ -426,7 +426,13 @@ async function handle(req, res, url) {
       // Manual liveness check: one ~1-token request.
       if (keyRec && seg[4] === "test" && method === "POST") {
         const body = await readJsonBody(req).catch(() => ({}))
-        const model = body.model || provider.models?.[0]
+        // Test with a model this key is actually used for — the provider's first
+        // model may be unsupported or paid and would fail for the wrong reason.
+        let model = body.model
+        if (!model) {
+          const used = config.load().pools.flatMap((p) => p.legs).find((l) => l.providerId === providerId)
+          model = used?.model || provider.models?.[0]
+        }
         if (!model) return error(res, 400, "provider has no models to test with"), true
 
         const applied = quirks.compose(provider.quirks || [])
@@ -442,15 +448,35 @@ async function handle(req, res, url) {
         const { classify } = require("./classify")
         if (out.ok) {
           health.markSuccess(keyId, { latencyMs: out.latencyMs })
-          json(res, 200, { ok: true, latencyMs: out.latencyMs, key: keyView(providerId, keyRec) })
+          json(res, 200, { ok: true, latencyMs: out.latencyMs, model, key: keyView(providerId, keyRec) })
         } else {
           const verdict = classify({ status: out.status, body: out.body, error: out.error })
-          health.markFailure(keyId, verdict)
+          // A failed test only marks the key when the verdict is a fact about
+          // the CREDENTIAL (rejected, out of quota, rate limited). Model-scoped
+          // problems (unsupported here, needs a paid tier, too long, filtered)
+          // say nothing about the key and must not pull it from pools where it
+          // works — that was the old test button's poison.
+          const KEY_LEVEL = new Set([
+            "invalid_key",
+            "unauthorized",
+            "forbidden",
+            "group_disabled",
+            "credit_exhausted",
+            "budget_exhausted",
+            "payment_required",
+            "rate_limited",
+            "concurrency_limit",
+          ])
+          if (KEY_LEVEL.has(verdict.reason)) {
+            health.markFailure(keyId, verdict)
+          }
           json(res, 200, {
             ok: false,
             status: out.status,
+            model,
             reason: verdict.reason,
             message: verdict.message,
+            healthAffected: KEY_LEVEL.has(verdict.reason),
             key: keyView(providerId, keyRec),
           })
         }
@@ -502,6 +528,19 @@ async function handle(req, res, url) {
     router.resetCursors()
     events.emit("pools", { action: "rotation-restarted" })
     json(res, 200, { ok: true })
+    return true
+  }
+
+  // Fire one test toast so the user can verify notifications without waiting
+  // for a real failover.
+  if (seg[0] === "notify" && seg[1] === "test" && method === "POST") {
+    const notify = require("./notify")
+    const fired = notify.maybe({
+      key: `test:${Date.now()}`,
+      title: "Cupbearer test notification",
+      message: "If you can read this, failover toasts are working. Real ones fire when a key drops out of rotation.",
+    })
+    json(res, 200, { fired, note: fired ? "toast dispatched" : "disabled or throttled — check notifyFailover in settings" })
     return true
   }
 

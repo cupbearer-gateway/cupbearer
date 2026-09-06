@@ -133,6 +133,16 @@ export default function Operations({ settings: initialSettings, onChanged }) {
             {busy === "canary" && <Spinner />}
             Check healthy keys now
           </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => run("toast", () => api.testToast(), "Test toast dispatched — check your notifications")}
+            disabled={busy}
+            title="Fire one test notification right now"
+          >
+            {busy === "toast" && <Spinner />}
+            Send test toast
+          </Button>
         </div>
         {canaryStatus?.lastAt && (
           <p className="text-[11px] text-[var(--color-ink-faint)]">

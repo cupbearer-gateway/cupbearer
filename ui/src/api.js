@@ -85,6 +85,7 @@ export const api = {
   runRevive: () => request("/api/revive/run", { method: "POST" }),
   runCanary: () => request("/api/canary/run", { method: "POST" }),
   getCanaryStatus: () => request("/api/canary/status"),
+  testToast: () => request("/api/notify/test", { method: "POST" }),
 
   // Clear every sticky key + reset rotation so providers are tried from the top.
   restartRotation: () => request("/api/rotation/restart", { method: "POST" }),

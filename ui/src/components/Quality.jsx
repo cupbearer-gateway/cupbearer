@@ -79,10 +79,7 @@ export default function Quality({ pools }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
-          Every quality verdict the gateway has recorded — shadow evidence and enforced gate decisions. Served responses
-          never fall below the configured bar; blocked downgrades are rerouted to a stronger leg.
-        </p>
+        <h2 className="brand-serif text-[15px] font-semibold">Every verdict, on the record</h2>
         <Select value={pool} onChange={(e) => setPool(e.target.value)} className="w-[180px] shrink-0" aria-label="Filter by pool">
           <option value="">all pools</option>
           {(pools || []).map((p) => (

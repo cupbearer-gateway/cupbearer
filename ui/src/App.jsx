@@ -96,6 +96,7 @@ export default function App() {
   const [detailToken, setDetailToken] = useState(0)
   const [poolsTab, setPoolsTab] = useState("pools")
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(() => !localStorage.getItem("cupbearer-welcomed"))
 
   const refetchTimer = useRef(null)
 
@@ -196,13 +197,13 @@ export default function App() {
               className="flex items-center gap-2 transition-transform duration-300 ease-[var(--ease-spring)] hover:scale-[1.03]"
               aria-label="Cupbearer home"
             >
-              <Logo />
+              <img src="/logo.png" alt="" className="h-[24px] w-[24px] rounded-[6px]" />
               <span className="brand-serif text-[17px] font-semibold tracking-[-0.01em]">Cupbearer</span>
             </button>
           )}
           {collapsed && (
             <button onClick={() => setView({ name: "stream" })} aria-label="Cupbearer home" className="flex justify-center">
-              <Logo size={22} />
+              <img src="/logo.png" alt="" className="h-[24px] w-[24px] rounded-[6px]" />
             </button>
           )}
           <button
@@ -259,13 +260,6 @@ export default function App() {
           <div className={collapsed ? "flex justify-center" : ""}>
             <LiveDot connected={connected} pulse={pulse} />
           </div>
-          {!collapsed && (
-            <div className="text-[9.5px] leading-relaxed text-[var(--color-ink-faint)]">
-              <span className="tnum text-[var(--color-ink-soft)]">127.0.0.1:4143</span>
-              <br />
-              loopback only · holds your keys
-            </div>
-          )}
         </div>
       </aside>
 
@@ -373,32 +367,68 @@ export default function App() {
         </main>
       </div>
 
-      {/* Settings drawer — knobs are a layer, not a destination. */}
-      {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setSettingsOpen(false)} />
-          <aside
-            className="animate-fade relative flex h-full w-full max-w-[560px] flex-col border-l border-[var(--color-line)] bg-[var(--color-base)]"
-            role="dialog"
-            aria-label="Settings"
-          >
-            <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-[var(--color-line)] px-4">
-              <h2 className="brand-serif text-[15px] font-semibold">Settings</h2>
-              <div className="flex-1" />
-              <button
-                onClick={() => setSettingsOpen(false)}
-                aria-label="Close settings"
-                className="flex h-7 w-7 items-center justify-center rounded-[5px] text-[var(--color-ink-faint)] transition-colors hover:bg-[var(--color-raised)] hover:text-[var(--color-ink)]"
-              >
-                <IconClose size={14} />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <Operations settings={settings} onChanged={load} />
-            </div>
-          </aside>
-        </div>
-      )}
+        {/* Settings drawer — knobs are a layer, not a destination. */}
+        {settingsOpen && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setSettingsOpen(false)} />
+            <aside
+              className="animate-fade relative flex h-full w-full max-w-[560px] flex-col border-l border-[var(--color-line)] bg-[var(--color-base)]"
+              role="dialog"
+              aria-label="Settings"
+            >
+              <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-[var(--color-line)] px-4">
+                <h2 className="brand-serif text-[15px] font-semibold">Settings</h2>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setSettingsOpen(false)}
+                  aria-label="Close settings"
+                  className="flex h-7 w-7 items-center justify-center rounded-[5px] text-[var(--color-ink-faint)] transition-colors hover:bg-[var(--color-raised)] hover:text-[var(--color-ink)]"
+                >
+                  <IconClose size={14} />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <Operations settings={settings} onChanged={load} />
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* First-run welcome: what to expect, why this is different. */}
+        {data && welcomeOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={() => { localStorage.setItem("cupbearer-welcomed", "1"); setWelcomeOpen(false) }} />
+            <Card sheen className="animate-pop relative w-full max-w-[560px] p-6">
+              <div className="flex items-center gap-3">
+                <img src="/logo.png" alt="" className="h-11 w-11 rounded-[10px]" />
+                <div>
+                  <h2 className="brand-serif text-[20px] font-semibold">Welcome to the tasting room</h2>
+                  <p className="text-[12px] text-[var(--color-ink-faint)]">Every request gets tasted before it's served.</p>
+                </div>
+              </div>
+              <ol className="mt-4 space-y-2.5 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
+                <li>
+                  <span className="font-medium text-[var(--color-ink)]">Stream</span> — your requests, live. Easy tasks ride your cheapest
+                  keys; harder ones get verified: the answer is checked before your client ever sees it.
+                </li>
+                <li>
+                  <span className="font-medium text-[var(--color-ink)]">Pools</span> — keys and legs. Add more legs to a pool and cheap
+                  answers get quality-checked against stronger backups automatically.
+                </li>
+                <li>
+                  <span className="font-medium text-[var(--color-ink)]">Evidence</span> — every verdict logged. Turn a pool's gate to{" "}
+                  <span className="tnum">shadow</span> to build proof, then <span className="tnum">gate</span> to start blocking.
+                </li>
+              </ol>
+              <div className="mt-5 flex items-center justify-between">
+                <span className="text-[11px] text-[var(--color-ink-faint)]">loopback only — your keys never leave this machine</span>
+                <Button variant="primary" onClick={() => { localStorage.setItem("cupbearer-welcomed", "1"); setWelcomeOpen(false) }}>
+                  Start tasting
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
       <PoolBuilder
         open={builder.open}
