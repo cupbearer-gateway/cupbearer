@@ -187,6 +187,7 @@ async function handle(req, res, url) {
         const p = cfg.pools.find((x) => x.id === poolId)
         if (body.name !== undefined) p.name = String(body.name).trim()
         if (body.keyStrategy !== undefined) p.keyStrategy = body.keyStrategy
+        if (body.qualityGate !== undefined) p.qualityGate = body.qualityGate
         if (Array.isArray(body.legs)) {
           p.legs = body.legs.map(legFromApi)
         }
