@@ -92,6 +92,13 @@
   footer { border-top: 1px solid var(--line); padding: 26px 0 60px; color: var(--faint); font-size: 13.5px; }
   .seals { display: flex; gap: 14px; align-items: center; margin-top: 14px; }
   .seals img { height: 58px; border-radius: 10px; box-shadow: var(--hairline); }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: var(--raised); color: var(--soft); border: 1px solid var(--line);
+    border-radius: 7px; padding: 4px 10px; font-size: 11.5px; cursor: pointer;
+    font-family: 'Inter Variable', sans-serif; transition: all .15s ease;
+  }
+  .copy-btn:hover { color: var(--ink); border-color: var(--line-strong); }
 </style>
 </head>
 <body>
@@ -109,7 +116,7 @@
 
 <div class="wrap hero">
   <img class="emblem" src="logo.png" alt="Cupbearer seal — chalice in shield" />
-  <h1>The LLM gateway that <em>never hands your task to a model that can't handle it.</em></h1>
+  <h1 class="serif">The LLM gateway that <em>never hands your task to a model that can't handle it.</em></h1>
   <p class="sub">
     One OpenAI-compatible endpoint in front of the free-tier and paid keys you already own.
     Key pooling, rotation, automatic failover — and quality-verified routing with the evidence to prove it.
@@ -122,7 +129,7 @@
 </div>
 
 <section id="quickstart">
-  <h2>30-second quickstart</h2>
+  <div class="wrap">  <h2>30-second quickstart</h2>
   <p class="muted">Bring your own keys. Nothing leaves your machine.</p>
   <br />
 <pre><span class="c"># install, then: pick providers, paste keys, get a starter pool</span>
@@ -132,10 +139,11 @@ npx cupbearer serve        <span class="c"># gateway on http://127.0.0.1:4143</s
 curl http://127.0.0.1:4143/v1/chat/completions \
   -H "content-type: application/json" \
   -d '{"model":"smart","messages":[{"role":"user","content":"hello"}]}'</pre>
+  </div>
 </section>
 
 <section id="connect">
-  <h2>Connect the agents you already use</h2>
+  <div class="wrap">  <h2>Connect the agents you already use</h2>
   <div class="grid" style="margin-top:16px">
     <div class="card">
       <h3 style="margin-top:0">Claude Code</h3>
@@ -153,10 +161,11 @@ claude</pre>
       <p class="muted" style="margin-top:10px">Any OpenAI-speaking tool works the same way.</p>
     </div>
   </div>
+  </div>
 </section>
 
 <section id="how">
-  <h2>How quality-verified routing works</h2>
+  <div class="wrap">  <h2>How quality-verified routing works</h2>
   <p class="muted">Failover on a 500 is table stakes. Cupbearer also refuses models that <em>answer but can't do the job</em>.</p>
   <br />
   <div class="grid">
@@ -165,19 +174,21 @@ claude</pre>
     <div class="card"><strong>3 · Taste</strong><p class="muted">A downgrade's response is checked <em>before the client sees a byte</em>: JSON validity, empty/refusal, looping output, truncation, tool-arg sanity — plus optional LLM-as-judge on your own keys.</p></div>
     <div class="card"><strong>4 · Seal</strong><p class="muted">Failing the bar is just another pre-commit failover. Every verdict is pressed into the evidence log — score, reasons, what happened.</p></div>
   </div>
+  </div>
 </section>
 
 <section id="demo">
-  <h2>See it</h2>
+  <div class="wrap">  <h2>See it</h2>
   <img class="shot" src="demo.gif" alt="Cupbearer dashboard — live verdicts and the evidence log" />
   <div class="seals">
     <img src="seals.png" alt="Verdict seals — held and blocked" />
     <p class="muted" style="margin:0">Every response gets its verdict sealed. The client only ever sees what passed.</p>
   </div>
+  </div>
 </section>
 
 <section id="benchmark">
-  <h2>The benchmark report</h2>
+  <div class="wrap">  <h2>The benchmark report</h2>
   <p class="muted">One command, honest numbers — failures included, nothing cherry-picked.</p>
 <pre>npx cupbearer benchmark --pool smart --reps 5</pre>
   <table>
@@ -187,10 +198,11 @@ claude</pre>
     <tr><td>Quality gate</td><td>10 downgrade attempts evaluated — 6 held, 4 blocked &amp; rerouted</td></tr>
   </table>
   <p class="muted" style="margin-top:10px">¹ Dry run against bundled stub providers — see the <a href="https://github.com/cupbearer-gateway/cupbearer/blob/main/docs/benchmark-example.md">full example</a> and regenerate against your own pool for real numbers.</p>
+  </div>
 </section>
 
 <section id="compare">
-  <h2>Why not a DIY config?</h2>
+  <div class="wrap">  <h2>Why not a DIY config?</h2>
   <table>
     <tr><th></th><th>Hand-rolled LiteLLM/OpenRouter config</th><th>Cupbearer</th></tr>
     <tr><td>Key pooling &amp; rotation</td><td class="good">yes, configured per model</td><td class="good">yes, with health states &amp; auto-revival</td></tr>
@@ -201,15 +213,17 @@ claude</pre>
     <tr><td>Setup</td><td class="no">YAML archaeology</td><td class="good">one guided command</td></tr>
   </table>
   <p class="muted" style="margin-top:10px">LiteLLM is a great universal proxy — Cupbearer is the layer it doesn't have: proof that a cheaper model was actually good enough.</p>
+  </div>
 </section>
 
 <section id="tos">
-  <h2>BYOK, always</h2>
+  <div class="wrap">  <h2>BYOK, always</h2>
   <p class="muted">
     Cupbearer only uses keys you configure locally, talks only to the official API endpoints of the providers you choose,
     and never transmits anything anywhere else. No bundled keys, no shared pools, no resale — use your own accounts and respect
     your providers' terms of service.
   </p>
+  </div>
 </section>
 
 <footer>
@@ -217,5 +231,23 @@ claude</pre>
     <span class="badge">MIT License</span> · <a href="https://github.com/cupbearer-gateway/cupbearer">GitHub</a> · <a href="https://github.com/cupbearer-gateway/cupbearer/issues">Issues</a> · built for developers and indie hackers who pool free-tier LLM keys
   </div>
 </footer>
+
+<script>
+  document.querySelectorAll('pre').forEach((pre) => {
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(pre.innerText);
+      btn.textContent = 'Copied';
+      setTimeout(() => (btn.textContent = 'Copy'), 1500);
+    });
+    wrap.appendChild(btn);
+  });
+</script>
 </body>
 </html>
