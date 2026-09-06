@@ -1,15 +1,15 @@
 # Cupbearer benchmark — pool `demo`
 
-*Run: 2026-09-06 00:23 · gateway: http://127.0.0.1:54212 · **dry run against bundled stub providers (no real LLMs)***
+*Run: 2026-09-06 00:26 · gateway: http://127.0.0.1:42374 · **dry run against bundled stub providers (no real LLMs)***
 
 | Metric | Value |
 |---|---|
 | Workload | 6 tasks × 2 reps = **12 requests** |
 | Task pass rate | **100.0%** (12/12) |
-| Latency (ok responses) | p50 33 ms · p95 153 ms |
+| Latency (ok responses) | p50 29 ms · p95 169 ms |
 | Tokens | 1440 in / 480 out |
 | Cost | **$0.00 spent** (free-tier keys; no price table supplied, so nothing was estimated) |
-| Quality gate (gateway evidence, last 24h) | 0 downgrade attempt(s) evaluated — 0 held, **0 blocked & rerouted**; served responses never fell below the bar |
+| Quality gate (gateway evidence, last 24h) | 10 downgrade attempt(s) evaluated — 6 held, **4 blocked & rerouted**; served responses never fell below the bar |
 
 ## Per task
 
@@ -26,8 +26,8 @@
 
 | Leg (provider/model) | Served | Task-passed |
 |---|---|---|
-| stub-strong/stub-strong-v1 | 6 | 6 |
-| stub-cheap/stub-cheap-v1 | 6 | 6 |
+| stub-strong/stub-strong-v1 | 4 | 4 |
+| stub-cheap/stub-cheap-v1 | 8 | 8 |
 
 ## Methodology
 

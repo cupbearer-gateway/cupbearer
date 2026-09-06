@@ -405,7 +405,7 @@ async function startStubGateway() {
           qualityGate: { mode: "gate", threshold: 0.8 },
           legs: [
             { providerId: "stub-cheap", model: "stub-cheap-v1" },
-            { providerId: "stub-strong", model: "stub-strong-v1", tier: 1 },
+            { providerId: "stub-strong", model: "stub-strong-v1" },
           ],
         },
       ],

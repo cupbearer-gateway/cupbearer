@@ -4,8 +4,8 @@
     "passed": 12,
     "failed": 0,
     "taskPassRate": 1,
-    "p50Ms": 33,
-    "p95Ms": 153,
+    "p50Ms": 29,
+    "p95Ms": 169,
     "tokensIn": 1440,
     "tokensOut": 480,
     "byTask": [
@@ -55,32 +55,37 @@
     "byProvider": [
       {
         "leg": "stub-strong/stub-strong-v1",
-        "served": 6,
-        "passed": 6
+        "served": 4,
+        "passed": 4
       },
       {
         "leg": "stub-cheap/stub-cheap-v1",
-        "served": 6,
-        "passed": 6
+        "served": 8,
+        "passed": 8
       }
     ]
   },
   "quality": {
-    "decisions": 0,
-    "passed": 0,
-    "failed": 0,
-    "avgScore": null,
-    "downgrades": 0,
+    "decisions": 10,
+    "passed": 6,
+    "failed": 4,
+    "avgScore": 0.6,
+    "downgrades": 10,
     "gate": {
-      "decisions": 0,
-      "passed": 0,
-      "qualityHold": null
+      "decisions": 10,
+      "passed": 6,
+      "qualityHold": 0.6
     },
     "shadow": {
       "decisions": 0,
       "passed": 0
     },
-    "failureReasons": []
+    "failureReasons": [
+      {
+        "reason": "response is not valid JSON",
+        "n": 4
+      }
+    ]
   },
   "cost": null,
   "results": [
@@ -91,8 +96,8 @@
       "reason": null,
       "provider": "stub-strong",
       "model": "stub-strong-v1",
-      "attempts": 1,
-      "latencyMs": 153,
+      "attempts": 2,
+      "latencyMs": 169,
       "tokensIn": 120,
       "tokensOut": 40
     },
@@ -103,8 +108,8 @@
       "reason": null,
       "provider": "stub-strong",
       "model": "stub-strong-v1",
-      "attempts": 1,
-      "latencyMs": 43,
+      "attempts": 2,
+      "latencyMs": 33,
       "tokensIn": 120,
       "tokensOut": 40
     },
@@ -116,7 +121,7 @@
       "provider": "stub-cheap",
       "model": "stub-cheap-v1",
       "attempts": 1,
-      "latencyMs": 36,
+      "latencyMs": 49,
       "tokensIn": 120,
       "tokensOut": 40
     },
@@ -128,19 +133,7 @@
       "provider": "stub-cheap",
       "model": "stub-cheap-v1",
       "attempts": 1,
-      "latencyMs": 44,
-      "tokensIn": 120,
-      "tokensOut": 40
-    },
-    {
-      "task": "summarize",
-      "kind": "condensation",
-      "ok": true,
-      "reason": null,
-      "provider": "stub-cheap",
-      "model": "stub-cheap-v1",
-      "attempts": 1,
-      "latencyMs": 38,
+      "latencyMs": 28,
       "tokensIn": 120,
       "tokensOut": 40
     },
@@ -157,62 +150,62 @@
       "tokensOut": 40
     },
     {
+      "task": "summarize",
+      "kind": "condensation",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 14,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
       "task": "code-gen",
       "kind": "code",
       "ok": true,
       "reason": null,
       "provider": "stub-cheap",
       "model": "stub-cheap-v1",
-      "attempts": 1,
-      "latencyMs": 31,
-      "tokensIn": 120,
-      "tokensOut": 40
-    },
-    {
-      "task": "code-gen",
-      "kind": "code",
-      "ok": true,
-      "reason": null,
-      "provider": "stub-cheap",
-      "model": "stub-cheap-v1",
-      "attempts": 1,
-      "latencyMs": 16,
-      "tokensIn": 120,
-      "tokensOut": 40
-    },
-    {
-      "task": "extraction",
-      "kind": "structured output",
-      "ok": true,
-      "reason": null,
-      "provider": "stub-strong",
-      "model": "stub-strong-v1",
-      "attempts": 1,
-      "latencyMs": 33,
-      "tokensIn": 120,
-      "tokensOut": 40
-    },
-    {
-      "task": "extraction",
-      "kind": "structured output",
-      "ok": true,
-      "reason": null,
-      "provider": "stub-strong",
-      "model": "stub-strong-v1",
       "attempts": 1,
       "latencyMs": 28,
       "tokensIn": 120,
       "tokensOut": 40
     },
     {
-      "task": "agentic-plan",
-      "kind": "tool calls + planning",
+      "task": "code-gen",
+      "kind": "code",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 32,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "extraction",
+      "kind": "structured output",
       "ok": true,
       "reason": null,
       "provider": "stub-strong",
       "model": "stub-strong-v1",
-      "attempts": 1,
-      "latencyMs": 9,
+      "attempts": 2,
+      "latencyMs": 23,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "extraction",
+      "kind": "structured output",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 2,
+      "latencyMs": 52,
       "tokensIn": 120,
       "tokensOut": 40
     },
@@ -221,20 +214,32 @@
       "kind": "tool calls + planning",
       "ok": true,
       "reason": null,
-      "provider": "stub-strong",
-      "model": "stub-strong-v1",
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
       "attempts": 1,
-      "latencyMs": 22,
+      "latencyMs": 14,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "agentic-plan",
+      "kind": "tool calls + planning",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 15,
       "tokensIn": 120,
       "tokensOut": 40
     }
   ],
   "meta": {
     "pool": "demo",
-    "gateway": "http://127.0.0.1:54212",
+    "gateway": "http://127.0.0.1:42374",
     "stub": true,
     "prices": false,
-    "at": "2026-09-06T00:23:26.598Z",
+    "at": "2026-09-06T00:26:15.162Z",
     "tasks": [
       {
         "id": "json-object",
