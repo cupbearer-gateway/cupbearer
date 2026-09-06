@@ -25,6 +25,11 @@
 
 const LONG_CONTEXT_TOKENS = 64 * 1024
 
+// Tier a leg serves at when it declares nothing. Keeping the default at
+// "standard" means tier-less pools route in declared order exactly as they
+// did before tiers existed.
+const DEFAULT_LEG_TIER = 2
+
 function contentLength(content) {
   if (!content) return 0
   if (typeof content === "string") return content.length
@@ -92,4 +97,4 @@ function profileRequest(payload) {
   return { inputTokens, maxTokens, hasTools: tools.length > 0, toolCount: tools.length, hasImages, taskType, requiredTier, capabilities }
 }
 
-module.exports = { profileRequest, estimateTokens, LONG_CONTEXT_TOKENS }
+module.exports = { profileRequest, estimateTokens, LONG_CONTEXT_TOKENS, DEFAULT_LEG_TIER }

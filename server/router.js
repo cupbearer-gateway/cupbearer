@@ -29,7 +29,8 @@ const quirks = require("./quirks")
 const upstream = require("./upstream")
 const { relay } = require("./relay")
 const { classify } = require("./classify")
-const { profileRequest } = require("./profile")
+const { profileRequest, DEFAULT_LEG_TIER } = require("./profile")
+const gate = require("./quality/gate")
 
 // Tier-aware routing reads what the request needs (profile.js) before any
 // upstream is contacted. A bug here must never take down routing: the plan
@@ -40,6 +41,55 @@ function safeProfile(payload) {
   } catch {
     return null
   }
+}
+
+// Evaluator context for the quality gate: everything the evaluators and the
+// judge may look at, plus the identity of what served the response.
+function gateContext({ provider, leg, keyId, payload, requirement, response }) {
+  return {
+    payload,
+    profile: requirement,
+    responseText: response.text,
+    toolCalls: response.toolCalls,
+    sawToolCalls: response.sawToolCalls,
+    finishReason: response.finishReason,
+    provider: provider.id,
+    keyId,
+    model: leg.model,
+    servedTier: leg.tier ?? DEFAULT_LEG_TIER,
+  }
+}
+
+// Shared gate-fail bookkeeping: a gated downgrade that failed evaluation is not
+// the key's fault — no health penalty, just another pre-commit failover, logged
+// everywhere. Control flow (break/return) stays at the call site.
+function recordGateFail({ pool, provider, leg, keyId, latencyMs, streamed, attempts, verdict, attemptCount }) {
+  const message = `quality score ${typeof verdict.score === "number" ? verdict.score.toFixed(2) : verdict.score} < threshold ${verdict.threshold}`
+  attempts.push({ provider: provider.id, model: leg.model, keyId, reason: "quality_gate_failed", message, score: verdict.score })
+  metrics.record({
+    poolId: pool.id,
+    providerId: provider.id,
+    keyId,
+    model: leg.model,
+    ok: false,
+    latencyMs,
+    status: 200,
+    reason: "quality_gate_failed",
+    message,
+    attempts: attemptCount,
+    streamed,
+    score: verdict.score,
+  })
+  events.emit("gate", {
+    poolId: pool.id,
+    providerId: provider.id,
+    keyId,
+    model: leg.model,
+    mode: verdict.mode,
+    passed: false,
+    score: verdict.score,
+    threshold: verdict.threshold,
+  })
 }
 
 // providerId -> rotation cursor
@@ -107,8 +157,6 @@ function resetCursors() {
 // first, cheapest (highest tier number) before stronger ones; everything else
 // keeps the declared order after them. `downgrade` marks legs whose tier is
 // worse than the request requires — the quality gate's business (quality/gate.js).
-const DEFAULT_LEG_TIER = 2
-
 function orderLegs(pool, requirement) {
   const legs = pool.legs || []
   if (!requirement || !legs.length) return legs.map((leg) => ({ leg, downgrade: false }))
@@ -398,9 +446,16 @@ async function dispatch({ pool, payload, res, signal }) {
   // attempt we know cannot finish. See config.js § time budgets.
   const budget = timeBudget(pool)
 
+  // Quality gate, read once per request. Evaluation happens per attempt below:
+  // "gate" blocks failing downgrades pre-commit, "shadow" only logs evidence.
+  const gc = gate.config(pool)
+  const gateMs = config.load().settings.gateTimeoutMs || 30000
+  let gateFails = 0
+
   for (let i = 0; i < plan.length; i++) {
     const step = plan[i]
     let legFail = null
+    let gateFailed = false
     if (step.skip) {
       attempts.push({ provider: step.leg.providerId, model: step.leg.model, skipped: step.skip })
       // Every key out of rotation: the provider is down, not just this leg.
@@ -561,14 +616,20 @@ async function dispatch({ pool, payload, res, signal }) {
           })
         }
 
+        // A gated downgrade buffers the whole stream and only commits if the
+        // quality gate passes — that is what makes the downgrade honest. The
+        // buffer wait is capped by gateTimeoutMs so gating cannot out-stall a
+        // plain attempt.
+        const useBuffer = gc.mode === "gate" && step.downgrade
         const result = await relay({
           upstream: opened.res,
           res,
           applied,
           ctx: opened.ctx,
-          chunkTimeoutMs: budget.chunkSlice(provider),
-          firstChunkTimeoutMs: budget.firstChunkSlice(provider),
-          onFirstByte: commit,
+          chunkTimeoutMs: useBuffer ? Math.min(budget.chunkSlice(provider), gateMs) : budget.chunkSlice(provider),
+          firstChunkTimeoutMs: useBuffer ? Math.min(budget.firstChunkSlice(provider), gateMs) : budget.firstChunkSlice(provider),
+          onFirstByte: useBuffer ? null : commit,
+          buffer: useBuffer,
         })
         opened.cleanup?.()
 
@@ -645,6 +706,78 @@ async function dispatch({ pool, payload, res, signal }) {
           continue // next key
         }
 
+        // Gated downgrade: the whole response is buffered and nothing has
+        // reached the client — evaluate, commit, or move on to a stronger leg.
+        if (useBuffer && !result.errored) {
+          const verdict = await gate.evaluate({
+            pool,
+            downgrade: true,
+            ctx: gateContext({
+              provider,
+              leg,
+              keyId,
+              payload,
+              requirement,
+              response: { text: result.text, toolCalls: result.toolCalls, sawToolCalls: result.sawToolCalls, finishReason: result.finishReason },
+            }),
+          })
+          if (!verdict.passed) {
+            gateFails++
+            recordGateFail({ pool, provider, leg, keyId, latencyMs: Date.now() - attemptStartedAt, streamed: true, attempts, verdict, attemptCount })
+            if (gateFails > gc.maxDowngrades) {
+              return {
+                requestError: {
+                  reason: "quality_gate_failed",
+                  keyState: "healthy",
+                  scope: "request",
+                  retry: false,
+                  message: `${gateFails} downgrade attempt(s) failed the quality gate (threshold ${gc.threshold}) — refusing to serve weaker output. Raise the threshold, switch qualityGate.mode to "shadow", or declare tiers so fewer legs count as downgrades.`,
+                },
+                status: 502,
+                attempts,
+              }
+            }
+            gateFailed = true
+            break // same model on the next key → same quality; try a stronger leg
+          }
+          commit()
+          res.end(result.frames)
+          health.markSuccess(keyId, { latencyMs: opened.latencyMs, tokensIn: result.tokensIn, tokensOut: result.tokensOut })
+          metrics.record({
+            poolId: pool.id,
+            providerId: provider.id,
+            keyId,
+            model: leg.model,
+            ok: true,
+            latencyMs: opened.latencyMs,
+            status: 200,
+            tokensIn: result.tokensIn,
+            tokensOut: result.tokensOut,
+            attempts: attemptCount,
+            streamed: true,
+            score: verdict.score,
+          })
+          events.emit("gate", {
+            poolId: pool.id,
+            providerId: provider.id,
+            keyId,
+            model: leg.model,
+            mode: "gate",
+            passed: true,
+            score: verdict.score,
+            threshold: verdict.threshold,
+          })
+          events.emit("success", {
+            poolId: pool.id,
+            providerId: provider.id,
+            keyId,
+            model: leg.model,
+            latencyMs: opened.latencyMs,
+            tokensOut: result.tokensOut,
+          })
+          return { committed: true, providerId: provider.id, keyId, attempts }
+        }
+
         // Committed: bytes are on the wire, so this attempt is final either way.
         if (!result.wrote) commit()
         res.end()
@@ -696,6 +829,24 @@ async function dispatch({ pool, payload, res, signal }) {
           latencyMs: opened.latencyMs,
           tokensOut: result.tokensOut,
         })
+        // Shadow mode: the response is already served — evaluate after the fact
+        // and log the evidence. Never blocks; the judge runs detached.
+        if (gc.mode === "shadow" && !result.errored) {
+          gate
+            .evaluate({
+              pool,
+              downgrade: step.downgrade,
+              ctx: gateContext({
+                provider,
+                leg,
+                keyId,
+                payload,
+                requirement,
+                response: { text: result.text, toolCalls: result.toolCalls, sawToolCalls: result.sawToolCalls, finishReason: result.finishReason },
+              }),
+            })
+            .catch(() => {})
+        }
         return { committed: true, providerId: provider.id, keyId, attempts }
       }
 
@@ -757,6 +908,51 @@ async function dispatch({ pool, payload, res, signal }) {
         continue
       }
 
+      // ---- quality gate ------------------------------------------------------
+      // Nothing has been sent to the client yet: a failing gated downgrade is
+      // just another pre-commit failover. Shadow mode serves and logs.
+      let gateScore = null
+      if (gc.mode !== "off") {
+        const ctx = gateContext({ provider, leg, keyId, payload, requirement, response: gate.responseFromJson(out.body) })
+        if (gc.mode === "gate" && step.downgrade) {
+          const verdict = await gate.evaluate({ pool, downgrade: true, ctx })
+          if (!verdict.passed) {
+            gateFails++
+            recordGateFail({ pool, provider, leg, keyId, latencyMs: out.latencyMs, streamed: false, attempts, verdict, attemptCount })
+            if (gateFails > gc.maxDowngrades) {
+              return {
+                requestError: {
+                  reason: "quality_gate_failed",
+                  keyState: "healthy",
+                  scope: "request",
+                  retry: false,
+                  message: `${gateFails} downgrade attempt(s) failed the quality gate (threshold ${gc.threshold}) — refusing to serve weaker output. Raise the threshold, switch qualityGate.mode to "shadow", or declare tiers so fewer legs count as downgrades.`,
+                },
+                status: 502,
+                attempts,
+              }
+            }
+            gateFailed = true
+            break // same model on the next key → same quality; try a stronger leg
+          }
+          gateScore = verdict.score
+          events.emit("gate", {
+            poolId: pool.id,
+            providerId: provider.id,
+            keyId,
+            model: leg.model,
+            mode: "gate",
+            passed: true,
+            score: verdict.score,
+            threshold: verdict.threshold,
+          })
+        } else if (gc.mode === "shadow") {
+          // Served regardless; evaluate for the evidence log. The judge may be
+          // slow, so this runs detached — never blocks the response.
+          gate.evaluate({ pool, downgrade: step.downgrade, ctx }).catch(() => {})
+        }
+      }
+
       const usage = out.body?.usage || {}
       health.markSuccess(keyId, {
         latencyMs: out.latencyMs,
@@ -775,6 +971,7 @@ async function dispatch({ pool, payload, res, signal }) {
         tokensOut: usage.completion_tokens || 0,
         attempts: attemptCount,
         streamed: false,
+        score: gateScore,
       })
       events.emit("success", {
         poolId: pool.id,
@@ -795,6 +992,10 @@ async function dispatch({ pool, payload, res, signal }) {
       res.end(JSON.stringify({ ...out.body, model: pool.id }))
       return { committed: true, providerId: provider.id, keyId, attempts }
     }
+
+    // A quality-gated failover is silent by design: routine, and fully logged
+    // in the decision feed (unlike a provider being down, which toasts).
+    if (gateFailed) continue
 
     // Leg finished. A failure on its last key (or a leg-wide failure) moves the
     // request to the next provider — toast that. Committed legs returned above.

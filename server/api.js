@@ -17,6 +17,7 @@ const upstream = require("./upstream")
 const router = require("./router")
 const canary = require("./canary")
 const revive = require("./revive")
+const store = require("./store")
 const { json, error, readJsonBody } = require("./http-util")
 
 // ---------------------------------------------------------------- serialisers
@@ -540,6 +541,25 @@ async function handle(req, res, url) {
     } catch (e) {
       return error(res, 400, e.message), true
     }
+    return true
+  }
+
+  // ---- quality evidence ----------------------------------------------------
+  if (seg[0] === "quality" && seg[1] === "decisions" && method === "GET") {
+    const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") || 100)))
+    json(res, 200, { decisions: store.recentDecisions(limit, url.searchParams.get("pool") || null) })
+    return true
+  }
+
+  if (seg[0] === "quality" && seg[1] === "summary" && method === "GET") {
+    const windowMs = Math.min(
+      30 * 24 * 3600 * 1000,
+      Math.max(60000, Number(url.searchParams.get("window")) || 24 * 3600 * 1000),
+    )
+    json(res, 200, {
+      summary: store.qualitySummary({ poolId: url.searchParams.get("pool") || null, windowMs }),
+      windowMs,
+    })
     return true
   }
 

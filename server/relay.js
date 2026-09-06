@@ -35,9 +35,12 @@ function sseEvent(obj) {
  *                                        fail over; defaults to chunkTimeoutMs.
  * @param {Function} [opts.onFirstByte]   called immediately before the first byte
  *                                        is flushed; the router writes headers here
- * @returns {Promise<{tokensIn:number,tokensOut:number,finishReason:string|null,errored:boolean,verdict:object|null,errorMessage:string|null,errorBody:object|null,wrote:boolean}>}
+ * @param {boolean} [opts.buffer]         collect every frame and return them
+ *                                        instead of writing; used by the router
+ *                                        to quality-gate a downgrade pre-commit
+ * @returns {Promise<{tokensIn:number,tokensOut:number,finishReason:string|null,errored:boolean,verdict:object|null,errorMessage:string|null,errorBody:object|null,wrote:boolean,text:string,reasoning:string,toolCalls:object[]|null,sawToolCalls:boolean,frames?:string}>}
  */
-async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firstChunkTimeoutMs, onFirstByte }) {
+async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firstChunkTimeoutMs, onFirstByte, buffer: buffered = false }) {
   const translator = applied.streamTranslator(ctx)
 
   let tokensIn = 0
@@ -47,6 +50,15 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
   let announcedFirstByte = false
   let sawNativeToolCalls = false
   let forwardedFinish = false
+  // Accumulated plain text (and reasoning) across the whole stream. The quality
+  // gate's evaluators read these; the passthrough path needs them because
+  // forwarded-verbatim chunks are otherwise opaque.
+  let textAccum = ""
+  let reasoningAccum = ""
+  let synthToolCalls = null
+  // Buffered mode: frames are collected and returned instead of written, so the
+  // router can quality-gate a downgrade before anything reaches the client.
+  const frames = []
   // Set when the failure is specific enough to classify (see the translator's
   // finish() error contract); the router prefers it over a generic stream_failed.
   let verdict = null
@@ -69,6 +81,10 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
   }
 
   const write = (s) => {
+    if (buffered) {
+      frames.push(s)
+      return
+    }
     if (!announcedFirstByte) {
       announcedFirstByte = true
       onFirstByte?.()
@@ -79,6 +95,8 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
   const emitFragments = (fragments) => {
     for (const f of fragments) {
       const delta = f.reasoning !== undefined ? { reasoning_content: f.reasoning } : { content: f.text }
+      if (f.reasoning !== undefined) reasoningAccum += f.reasoning
+      else textAccum += f.text
       write(sseEvent(base({ choices: [{ index: 0, delta, logprobs: null, finish_reason: null }] })))
     }
   }
@@ -120,6 +138,7 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
     // When the upstream already streamed real tool_calls we forwarded them
     // verbatim; a translator must not also synthesise a second set.
     const toolCalls = sawNativeToolCalls ? null : synthesised
+    if (toolCalls) synthToolCalls = toolCalls
     if (toolCalls) {
       write(
         sseEvent(
@@ -149,6 +168,13 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
     }
     const fr = payload?.choices?.[0]?.finish_reason
     if (fr) finishReason = fr
+    // Text accumulation for the quality gate — passthrough only. The translated
+    // path accumulates in emitFragments; observing there would double-count.
+    if (!translator) {
+      const d = payload?.choices?.[0]?.delta
+      if (typeof d?.content === "string") textAccum += d.content
+      if (typeof d?.reasoning_content === "string") reasoningAccum += d.reasoning_content
+    }
   }
 
   const handleLine = (line) => {
@@ -317,6 +343,12 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
     errorBody,
     wrote: announcedFirstByte,
     sawUpstreamBytes: sawAnyChunk,
+    // Quality-gate inputs and buffered output (buffer mode only).
+    text: textAccum,
+    reasoning: reasoningAccum,
+    toolCalls: synthToolCalls,
+    sawToolCalls: sawNativeToolCalls,
+    frames: buffered ? frames.join("") : undefined,
   }
 }
 

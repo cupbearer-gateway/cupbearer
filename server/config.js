@@ -64,8 +64,17 @@ const DEFAULT_CONFIG = {
     // Background health canary probe of healthy keys
     canaryEnabled: false,
     canaryIntervalMinutes: 15,
-    // JSONL log retention in days
+    // Log retention in days (SQLite request + decision log)
     metricsRetainDays: 14,
+    // --- quality gate -------------------------------------------------------
+    // Default mode for pools that do not set pool.qualityGate.mode.
+    //   off     availability-only routing
+    //   shadow  evaluate and log after serving; zero latency cost
+    //   gate    block downgrades whose response fails evaluation
+    defaultQualityMode: "off",
+    // Cap on a gated attempt's buffered wait and on the judge call, so gate
+    // mode can never stall a request the way an unbounded upstream could.
+    gateTimeoutMs: 30000,
   },
 }
 
@@ -188,6 +197,12 @@ function validate(cfg) {
     if (typeof s.metricsRetainDays !== "number" || s.metricsRetainDays < 1 || s.metricsRetainDays > 90) {
       errors.push("settings.metricsRetainDays must be a number between 1 and 90")
     }
+    if (!["off", "shadow", "gate"].includes(s.defaultQualityMode)) {
+      errors.push('settings.defaultQualityMode must be one of: "off", "shadow", "gate"')
+    }
+    if (typeof s.gateTimeoutMs !== "number" || s.gateTimeoutMs < 1000 || s.gateTimeoutMs > 300000) {
+      errors.push("settings.gateTimeoutMs must be a number between 1000 and 300000")
+    }
   }
 
   const providerIds = new Set()
@@ -230,6 +245,32 @@ function validate(cfg) {
     }
     if (pool.keyStrategy && !validStrategies.has(pool.keyStrategy)) {
       errors.push(`pool ${pool.id}: invalid keyStrategy "${pool.keyStrategy}"`)
+    }
+    if (pool.qualityGate !== undefined) {
+      const qg = pool.qualityGate
+      if (!qg || typeof qg !== "object" || Array.isArray(qg)) {
+        errors.push(`pool ${pool.id}: qualityGate must be an object`)
+      } else {
+        if (qg.mode !== undefined && !["off", "shadow", "gate"].includes(qg.mode)) {
+          errors.push(`pool ${pool.id}: qualityGate.mode must be one of: "off", "shadow", "gate"`)
+        }
+        if (qg.threshold !== undefined && (typeof qg.threshold !== "number" || qg.threshold < 0 || qg.threshold > 1)) {
+          errors.push(`pool ${pool.id}: qualityGate.threshold must be a number between 0 and 1`)
+        }
+        if (qg.evaluators !== undefined && !Array.isArray(qg.evaluators)) {
+          errors.push(`pool ${pool.id}: qualityGate.evaluators must be an array of evaluator ids`)
+        }
+        if (
+          qg.judge !== undefined &&
+          qg.judge !== null &&
+          (typeof qg.judge !== "object" || !qg.judge.providerId || !qg.judge.model)
+        ) {
+          errors.push(`pool ${pool.id}: qualityGate.judge must be { providerId, model } or null`)
+        }
+        if (qg.maxDowngrades !== undefined && (typeof qg.maxDowngrades !== "number" || qg.maxDowngrades < 0 || qg.maxDowngrades > 4)) {
+          errors.push(`pool ${pool.id}: qualityGate.maxDowngrades must be a number between 0 and 4`)
+        }
+      }
     }
     if (!Array.isArray(pool.legs) || pool.legs.length === 0) {
       errors.push(`pool ${pool.id}: needs at least one leg`)
