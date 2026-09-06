@@ -231,6 +231,16 @@ function shutdown() {
   flush()
 }
 
+function clear() {
+  try {
+    const d = init()
+    d.prepare("DELETE FROM requests").run()
+    d.prepare("DELETE FROM decisions").run()
+  } catch {}
+  pendingRequests = []
+  pendingDecisions = []
+}
+
 function reset() {
   pendingRequests = []
   pendingDecisions = []
@@ -251,4 +261,4 @@ function safeParse(s) {
   }
 }
 
-module.exports = { appendRequest, appendDecision, recentDecisions, qualitySummary, hydrateRows, prune, flush, shutdown, reset, DB_FILE }
+module.exports = { appendRequest, appendDecision, recentDecisions, qualitySummary, hydrateRows, prune, flush, shutdown, reset, clear, DB_FILE }

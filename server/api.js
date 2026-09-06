@@ -531,6 +531,16 @@ async function handle(req, res, url) {
     return true
   }
 
+  // Wipe the evidence log (requests + decisions). Counters and health are untouched.
+  if (seg[0] === "history" && seg[1] === "clear" && method === "POST") {
+    const store = require("./store")
+    store.clear()
+    metrics.reset()
+    events.emit("settings", { action: "history-cleared" })
+    json(res, 200, { ok: true })
+    return true
+  }
+
   // Fire one test toast so the user can verify notifications without waiting
   // for a real failover.
   if (seg[0] === "notify" && seg[1] === "test" && method === "POST") {

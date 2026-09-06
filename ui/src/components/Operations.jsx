@@ -143,6 +143,16 @@ export default function Operations({ settings: initialSettings, onChanged }) {
             {busy === "toast" && <Spinner />}
             Send test toast
           </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => run("history", () => api.clearHistory(), "Evidence log cleared — health and counters untouched")}
+            disabled={busy}
+            title="Wipe the request log and quality decisions (keys and health untouched)"
+          >
+            {busy === "history" && <Spinner />}
+            Clear history
+          </Button>
         </div>
         {canaryStatus?.lastAt && (
           <p className="text-[11px] text-[var(--color-ink-faint)]">

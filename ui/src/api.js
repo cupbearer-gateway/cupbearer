@@ -89,6 +89,7 @@ export const api = {
 
   // Clear every sticky key + reset rotation so providers are tried from the top.
   restartRotation: () => request("/api/rotation/restart", { method: "POST" }),
+  clearHistory: () => request("/api/history/clear", { method: "POST" }),
 }
 
 /**
