@@ -110,9 +110,12 @@ function keyScore(keyId) {
   return (p50 / Math.max(0.1, successRate)) + statePenalty
 }
 
-function orderedKeys(provider, strategy) {
+function orderedKeys(provider, strategy, model) {
   const allKeys = (provider.keys || []).map((k) => k.id).filter((id) => secrets.has(id))
-  const usable = allKeys.filter((id) => health.isUsable(id))
+  // Usability is checked per (key, model): a key pulled for ONE model (its
+  // budget pool for that model is empty, or that model keeps erroring) still
+  // serves its other models.
+  const usable = allKeys.filter((id) => health.isUsable(id, model))
   if (usable.length <= 1) return usable
 
   const maxKeys = config.load().settings.maxKeysPerLeg || 8
@@ -145,8 +148,9 @@ function orderedKeys(provider, strategy) {
   return usable.slice(start).concat(usable.slice(0, start)).slice(0, maxKeys)
 }
 
-function advanceCursor(provider) {
-  const usableCount = (provider.keys || []).filter((k) => secrets.has(k.id) && health.isUsable(k.id)).length || 1
+function advanceCursor(provider, model) {
+  const usableCount =
+    (provider.keys || []).filter((k) => secrets.has(k.id) && health.isUsable(k.id, model)).length || 1
   cursors.set(provider.id, ((cursors.get(provider.id) ?? 0) + 1) % usableCount)
 }
 
@@ -191,7 +195,7 @@ function buildPlan(pool, requirement) {
       plan.push({ leg, provider, skip: "provider_disabled", keys: [], downgrade })
       continue
     }
-    const usableKeys = orderedKeys(provider, pool.keyStrategy)
+    const usableKeys = orderedKeys(provider, pool.keyStrategy, leg.model)
     if (!usableKeys.length) {
       const hasSecrets = (provider.keys || []).some((k) => secrets.has(k.id))
       const skipReason = hasSecrets ? "all_keys_unusable" : "no_keys"
@@ -253,10 +257,22 @@ function reasonPhrase(reason) {
 }
 
 // Dominant reason a provider's keys are all unusable, for legs that are skipped
-// before any attempt because every key is already out of rotation.
-function deadPhrase(providerId) {
+// before any attempt because every key is already out of rotation. Model-scoped
+// pulls (quota for one model etc.) are read first so the toast names the real
+// cause instead of "no usable keys".
+function deadPhrase(providerId, model) {
   const provider = config.getProvider(providerId)
-  const states = (provider?.keys || []).map((k) => health.snapshot(k.id)?.state)
+  const keys = provider?.keys || []
+  if (model) {
+    for (const k of keys) {
+      const ms = health.snapshot(k.id)?.modelStates || []
+      const hit = ms.find((m) => m.model === model)
+      if (hit?.state === "exhausted") return "is out of quota for this model"
+      if (hit?.state === "dead") return "keeps failing for this model"
+      if (hit?.state === "unavailable") return "can't serve this model right now"
+    }
+  }
+  const states = keys.map((k) => health.snapshot(k.id)?.state)
   if (states.includes("exhausted")) return "is out of quota"
   if (states.includes("auth_failed")) return "has a rejected key"
   if (states.includes("dead")) return "is marked dead"
@@ -419,7 +435,7 @@ function notifySkippedLeg(pool, step, plan, i) {
     step.leg.providerId,
     `${pool.id}:${step.leg.providerId}`,
     "Provider unavailable",
-    `"${providerLabel(step.leg.providerId)}" ${deadPhrase(step.leg.providerId)} on "${pool.name || pool.id}" — using "${providerLabel(next.leg.providerId)}".`,
+    `"${providerLabel(step.leg.providerId)}" ${deadPhrase(step.leg.providerId, step.leg.model)} on "${pool.name || pool.id}" — using "${providerLabel(next.leg.providerId)}".`,
   )
 }
 
@@ -526,7 +542,7 @@ async function dispatch({ pool, payload, res, signal }) {
 
         if (!opened.ok) {
           const verdict = classify({ status: opened.status, body: opened.body, error: opened.error })
-          health.markFailure(keyId, verdict)
+          health.markFailure(keyId, verdict, leg.model)
           metrics.record({
             poolId: pool.id,
             providerId: provider.id,
@@ -576,20 +592,30 @@ async function dispatch({ pool, payload, res, signal }) {
             legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId }
           }
           if (verdict.scope === "leg") break // next provider
-          advanceCursor(provider)
+          advanceCursor(provider, leg.model)
           continue // next key
         }
 
         // Gateway answered a stream request with plain JSON. Serve it as-is.
         if (opened.notStream) {
-          res.writeHead(200, { "content-type": "application/json" })
+          res.writeHead(200, {
+            "content-type": "application/json",
+            "x-cupbearer-pool": pool.id,
+            "x-cupbearer-provider": provider.id,
+            "x-cupbearer-model": leg.model,
+            "x-cupbearer-attempts": String(attemptCount),
+          })
           res.end(JSON.stringify(opened.body))
           const usage = opened.body?.usage || {}
-          health.markSuccess(keyId, {
-            latencyMs: opened.latencyMs,
-            tokensIn: usage.prompt_tokens || 0,
-            tokensOut: usage.completion_tokens || 0,
-          })
+          health.markSuccess(
+            keyId,
+            {
+              latencyMs: opened.latencyMs,
+              tokensIn: usage.prompt_tokens || 0,
+              tokensOut: usage.completion_tokens || 0,
+            },
+            leg.model,
+          )
           metrics.record({
             poolId: pool.id,
             providerId: provider.id,
@@ -615,6 +641,7 @@ async function dispatch({ pool, payload, res, signal }) {
             "cache-control": "no-cache, no-transform",
             connection: "keep-alive",
             "x-accel-buffering": "no",
+            "x-cupbearer-pool": pool.id,
             "x-cupbearer-provider": provider.id,
             "x-cupbearer-model": leg.model,
             "x-cupbearer-attempts": String(attemptCount),
@@ -658,7 +685,7 @@ async function dispatch({ pool, payload, res, signal }) {
                   retry: true,
                   message: result.errorMessage || "Upstream stream failed",
                 }
-          health.markFailure(keyId, verdict)
+          health.markFailure(keyId, verdict, leg.model)
           metrics.record({
             poolId: pool.id,
             providerId: provider.id,
@@ -707,7 +734,7 @@ async function dispatch({ pool, payload, res, signal }) {
             legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId }
           }
           if (verdict.scope === "leg") break // next provider
-          advanceCursor(provider)
+          advanceCursor(provider, leg.model)
           continue // next key
         }
 
@@ -747,7 +774,7 @@ async function dispatch({ pool, payload, res, signal }) {
           }
           commit()
           res.end(result.frames)
-          health.markSuccess(keyId, { latencyMs: opened.latencyMs, tokensIn: result.tokensIn, tokensOut: result.tokensOut })
+          health.markSuccess(keyId, { latencyMs: opened.latencyMs, tokensIn: result.tokensIn, tokensOut: result.tokensOut }, leg.model)
           metrics.record({
             poolId: pool.id,
             providerId: provider.id,
@@ -803,7 +830,7 @@ async function dispatch({ pool, payload, res, signal }) {
           streamVerdict = result.verdict
             ? { ...result.verdict, message: result.errorMessage || result.verdict.reason }
             : { reason: "stream_failed", keyState: "degraded", message: "Upstream stream failed mid-response" }
-          health.markFailure(keyId, streamVerdict)
+          health.markFailure(keyId, streamVerdict, leg.model)
           attempts.push({
             provider: provider.id,
             model: leg.model,
@@ -813,11 +840,15 @@ async function dispatch({ pool, payload, res, signal }) {
             message: streamVerdict.message,
           })
         } else {
-          health.markSuccess(keyId, {
-            latencyMs: opened.latencyMs,
-            tokensIn: result.tokensIn,
-            tokensOut: result.tokensOut,
-          })
+          health.markSuccess(
+            keyId,
+            {
+              latencyMs: opened.latencyMs,
+              tokensIn: result.tokensIn,
+              tokensOut: result.tokensOut,
+            },
+            leg.model,
+          )
         }
         metrics.record({
           poolId: pool.id,
@@ -885,7 +916,7 @@ async function dispatch({ pool, payload, res, signal }) {
 
       if (!out.ok) {
         const verdict = classify({ status: out.status, body: out.body, error: out.error })
-        health.markFailure(keyId, verdict)
+        health.markFailure(keyId, verdict, leg.model)
         metrics.record({
           poolId: pool.id,
           providerId: provider.id,
@@ -934,7 +965,7 @@ async function dispatch({ pool, payload, res, signal }) {
           legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId }
         }
         if (verdict.scope === "leg") break
-        advanceCursor(provider)
+        advanceCursor(provider, leg.model)
         continue
       }
 
@@ -1003,11 +1034,15 @@ async function dispatch({ pool, payload, res, signal }) {
       }
 
       const usage = out.body?.usage || {}
-      health.markSuccess(keyId, {
-        latencyMs: out.latencyMs,
-        tokensIn: usage.prompt_tokens || 0,
-        tokensOut: usage.completion_tokens || 0,
-      })
+      health.markSuccess(
+        keyId,
+        {
+          latencyMs: out.latencyMs,
+          tokensIn: usage.prompt_tokens || 0,
+          tokensOut: usage.completion_tokens || 0,
+        },
+        leg.model,
+      )
       metrics.record({
         poolId: pool.id,
         providerId: provider.id,
@@ -1039,13 +1074,18 @@ async function dispatch({ pool, payload, res, signal }) {
 
       res.writeHead(200, {
         "content-type": "application/json",
+        "x-cupbearer-pool": pool.id,
         "x-cupbearer-provider": provider.id,
         "x-cupbearer-model": leg.model,
         "x-cupbearer-attempts": String(attemptCount),
       })
-      // Report the pool id back as the model so the client sees what it asked for.
-      res.end(JSON.stringify({ ...out.body, model: pool.id }))
-      return { committed: true, providerId: provider.id, keyId, attempts }
+      // Report the model that actually served back as the model field, so the
+      // client can tell which leg in the pool answered. The pool id stays in
+      // the x-cupbearer-pool header for anyone that wants the routing context.
+      res.end(
+        JSON.stringify({ ...out.body, model: leg.model, cupbearer: { pool: pool.id, provider: provider.id, model: leg.model, attempts: attemptCount } }),
+      )
+      return { committed: true, providerId: provider.id, keyId, model: leg.model, attempts }
     }
 
     // A quality-gated failover is silent by design: routine, and fully logged
