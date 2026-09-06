@@ -1,0 +1,44 @@
+{
+  "name": "cupbearer",
+  "version": "0.1.0",
+  "description": "The local LLM gateway that never hands your task to a model that can't handle it. One OpenAI-compatible endpoint over your own free-tier and paid provider keys, with key pooling, failover, and quality-gated routing.",
+  "license": "MIT",
+  "main": "server/index.js",
+  "bin": {
+    "cupbearer": "scripts/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "server/",
+    "scripts/",
+    "ui/",
+    "docs/",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node server/index.js",
+    "serve": "node server/index.js",
+    "setup": "node scripts/cli.js setup",
+    "doctor": "node scripts/cli.js doctor",
+    "test": "node --test server/**/*.test.js",
+    "smoke": "node scripts/smoke.js",
+    "benchmark": "node scripts/benchmark.js",
+    "build": "npm --prefix ui run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cupbearer-gateway/cupbearer.git"
+  },
+  "keywords": [
+    "llm",
+    "gateway",
+    "proxy",
+    "openai",
+    "router",
+    "failover",
+    "byok"
+  ]
+}

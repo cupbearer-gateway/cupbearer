@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output (regenerate with `npm run build` in ui/)
+dist/
+
+# User-local state — never commit
+config.json
+secrets.json
+health-state.json
+*.db
+*.db-wal
+*.db-shm
+logs/
+metrics/
+.env
+.env.local
+*.tmp
