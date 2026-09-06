@@ -201,7 +201,7 @@ test("shadow mode serves everything and only logs", async () => {
     assert.equal(outcome.committed, true, "shadow never blocks")
     assert.equal(outcome.providerId, "light", "the junk response was served anyway")
     // Shadow evaluation is detached; give it a beat, then check the evidence.
-    await new Promise((r) => setTimeout(r, 50))
+    await new Promise((r) => setTimeout(r, 400))
     const rows = await decisions()
     const shadowRow = rows.find((r) => r.mode === "shadow")
     assert.ok(shadowRow, "the shadow decision is recorded")

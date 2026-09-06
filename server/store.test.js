@@ -74,6 +74,7 @@ test("prune drops rows older than the retention window", () => {
   const db = require("node:sqlite")
   // Age every row past a 1-day window by rewriting ts directly.
   const d = new db.DatabaseSync(require("./paths").METRICS_DIR + "/cupbearer.db")
+  d.exec("PRAGMA busy_timeout = 5000")
   d.prepare("UPDATE requests SET ts = ?").run(Date.now() - 3 * 24 * 3600 * 1000)
   d.close()
   store.prune(1)
