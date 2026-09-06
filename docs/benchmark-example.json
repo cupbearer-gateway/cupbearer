@@ -1,0 +1,271 @@
+{
+  "summary": {
+    "requests": 12,
+    "passed": 12,
+    "failed": 0,
+    "taskPassRate": 1,
+    "p50Ms": 33,
+    "p95Ms": 153,
+    "tokensIn": 1440,
+    "tokensOut": 480,
+    "byTask": [
+      {
+        "task": "json-object",
+        "kind": "structured output",
+        "calls": 2,
+        "passed": 2,
+        "p50Ms": null
+      },
+      {
+        "task": "instruction-follow",
+        "kind": "exact format",
+        "calls": 2,
+        "passed": 2,
+        "p50Ms": null
+      },
+      {
+        "task": "summarize",
+        "kind": "condensation",
+        "calls": 2,
+        "passed": 2,
+        "p50Ms": null
+      },
+      {
+        "task": "code-gen",
+        "kind": "code",
+        "calls": 2,
+        "passed": 2,
+        "p50Ms": null
+      },
+      {
+        "task": "extraction",
+        "kind": "structured output",
+        "calls": 2,
+        "passed": 2,
+        "p50Ms": null
+      },
+      {
+        "task": "agentic-plan",
+        "kind": "tool calls + planning",
+        "calls": 2,
+        "passed": 2,
+        "p50Ms": null
+      }
+    ],
+    "byProvider": [
+      {
+        "leg": "stub-strong/stub-strong-v1",
+        "served": 6,
+        "passed": 6
+      },
+      {
+        "leg": "stub-cheap/stub-cheap-v1",
+        "served": 6,
+        "passed": 6
+      }
+    ]
+  },
+  "quality": {
+    "decisions": 0,
+    "passed": 0,
+    "failed": 0,
+    "avgScore": null,
+    "downgrades": 0,
+    "gate": {
+      "decisions": 0,
+      "passed": 0,
+      "qualityHold": null
+    },
+    "shadow": {
+      "decisions": 0,
+      "passed": 0
+    },
+    "failureReasons": []
+  },
+  "cost": null,
+  "results": [
+    {
+      "task": "json-object",
+      "kind": "structured output",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 1,
+      "latencyMs": 153,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "json-object",
+      "kind": "structured output",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 1,
+      "latencyMs": 43,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "instruction-follow",
+      "kind": "exact format",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 36,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "instruction-follow",
+      "kind": "exact format",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 44,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "summarize",
+      "kind": "condensation",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 38,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "summarize",
+      "kind": "condensation",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 29,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "code-gen",
+      "kind": "code",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 31,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "code-gen",
+      "kind": "code",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-cheap",
+      "model": "stub-cheap-v1",
+      "attempts": 1,
+      "latencyMs": 16,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "extraction",
+      "kind": "structured output",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 1,
+      "latencyMs": 33,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "extraction",
+      "kind": "structured output",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 1,
+      "latencyMs": 28,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "agentic-plan",
+      "kind": "tool calls + planning",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 1,
+      "latencyMs": 9,
+      "tokensIn": 120,
+      "tokensOut": 40
+    },
+    {
+      "task": "agentic-plan",
+      "kind": "tool calls + planning",
+      "ok": true,
+      "reason": null,
+      "provider": "stub-strong",
+      "model": "stub-strong-v1",
+      "attempts": 1,
+      "latencyMs": 22,
+      "tokensIn": 120,
+      "tokensOut": 40
+    }
+  ],
+  "meta": {
+    "pool": "demo",
+    "gateway": "http://127.0.0.1:54212",
+    "stub": true,
+    "prices": false,
+    "at": "2026-09-06T00:23:26.598Z",
+    "tasks": [
+      {
+        "id": "json-object",
+        "kind": "structured output",
+        "prompt": "Return a JSON object with exactly two keys: \"name\" (a string) and \"version\" (the number 1). Reply with JSON only, no commentary."
+      },
+      {
+        "id": "instruction-follow",
+        "kind": "exact format",
+        "prompt": "List exactly five color names, one per line, each line numbered like this: 1. red — and nothing else."
+      },
+      {
+        "id": "summarize",
+        "kind": "condensation",
+        "prompt": "Summarize the following passage in 25 to 60 words. Reply with the summary only.\n\nThe Vault, last of the great merchant banks of the low country, kept no gold. Its ledgers recorded promises instead: who would deliver grain at harvest, who would repay a debt by the third moon, who owed whom a favor that could not be refused. Scribes copied every promise twice, once in ink and once in memory, and the memory copy was the binding one. When the river floods came and the ink ran, the Vault stood open and empty and untouched, because everything it owned was already inside people's heads. Collectors, the ones who walked the muddy roads to remind debtors of what they had promised, were the bank's only guards, and they carried no weapons but a very good recall for voices."
+      },
+      {
+        "id": "code-gen",
+        "kind": "code",
+        "prompt": "Write a JavaScript function add(a, b) that returns the sum of its two arguments. Reply with the code only."
+      },
+      {
+        "id": "extraction",
+        "kind": "structured output",
+        "prompt": "From the sentence below, extract every date mentioned and return a JSON object {\"dates\": [\"YYYY-MM-DD\", ...]} in chronological order. Dates: \"The audit began on 2026-03-14, paused over Easter, and resumed on 2026-04-02 before closing on 2026-05-30.\" Reply with JSON only."
+      },
+      {
+        "id": "agentic-plan",
+        "kind": "tool calls + planning",
+        "prompt": "Plan a database migration for a 3-node cluster in detail. Use the provided tools where they help, then summarize."
+      }
+    ]
+  }
+}
