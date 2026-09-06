@@ -45,11 +45,22 @@ function fakeRes() {
 }
 
 // A stream that never yields: read() hangs forever, so only a timeout ends it.
+//
+// The hang promise holds no handle, and the relay's timeout is deliberately
+// unref'd — on Node 22 that empties the event loop and the runner cancels the
+// pending test ("event loop has already resolved"). A ref'd keep-alive timer
+// holds the loop until the relay's finally calls cancel(), which releases it.
 function silentBody() {
   return {
     body: {
       getReader() {
-        return { read: () => new Promise(() => {}), cancel: async () => {} }
+        const keepAlive = setTimeout(() => {}, 30_000)
+        return {
+          read: () => new Promise(() => {}),
+          cancel: async () => {
+            clearTimeout(keepAlive)
+          },
+        }
       },
     },
   }
@@ -69,10 +80,16 @@ function oneChunkThenSilence() {
     body: {
       getReader() {
         let sent = false
+        // Keep-alive for the hang below — see silentBody().
+        const keepAlive = setTimeout(() => {}, 30_000)
         return {
           read: () =>
-            sent ? new Promise(() => {}) : ((sent = true), Promise.resolve({ done: false, value: encoder.encode(line) })),
-          cancel: async () => {},
+            sent
+              ? new Promise(() => {})
+              : ((sent = true), Promise.resolve({ done: false, value: encoder.encode(line) })),
+          cancel: async () => {
+            clearTimeout(keepAlive)
+          },
         }
       },
     },
