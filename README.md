@@ -1,5 +1,7 @@
 # Cupbearer
 
+[![Cupbearer — brass seal emblem](docs/banner.png)](#)
+
 > **The LLM gateway that never hands your task to a model that can't handle it.**
 
 One OpenAI-compatible endpoint in front of all the free-tier and paid LLM keys you already own. Key pooling, rotation, and automatic failover — plus the part nobody else does: **quality-verified routing**. A request is only served from (or downgraded to) a cheaper model when quality measurably holds, and every decision is logged as evidence you can read.
