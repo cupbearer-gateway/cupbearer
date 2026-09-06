@@ -66,6 +66,16 @@ Every gateway can fail over when a provider returns a 500. Cupbearer also refuse
 
 Two modes: `shadow` (log evidence, never block — the default) and `gate` (block failing downgrades). The dashboard's Quality view shows the live feed.
 
+### A concrete request, end to end
+
+Say your pool is `smart` with two legs — `groq/llama-3.3-70b` first, `gemini/gemini-flash-latest` second — and the gate is on:
+
+1. Your client sends **"translate this sentence"**. The profiler marks it *light*. Groq answers; nothing is checked (nothing needed to be) — served in 400 ms.
+2. Your client sends an **agentic coding task** (5 tools, big output). The profiler marks it *flagship*. Groq still serves first — but this time its answer is a downgrade, so Cupbearer holds it, runs the checks, finds the tool-call arguments are broken JSON, **blocks it**, and Gemini's answer goes to your client instead. Groq's junk is in the log, never in your editor.
+3. Open **Evidence**: both requests are on the record with scores. That's the whole loop — you keep cheap keys first, and the strong model only pays for tokens when the cheap one actually can't do the job.
+
+What it is **not**: a model beauty contest. Cupbearer never scores all your models and picks the smartest — your pool order is the intent. Its one opinion is veto power: a downgrade that fails the taste test never reaches you.
+
 ```
 request → profile → tiered route → adapter (key pool, rotation) → quality gate → respond
                                        │ failover on any pre-commit failure ◄──┘
