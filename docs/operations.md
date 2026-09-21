@@ -29,6 +29,8 @@ dist/                dashboard bundle (in the app dir, not here — see paths.js
 | `CUPBEARER_UI_DIST` | `<app>/dist` | dashboard bundle override |
 | `CUPBEARER_ALLOW_LAN` | unset | must be `1` to bind anything but loopback |
 
+On the loopback surfaces every request's `Host` header must be one of the gateway's own names (`127.0.0.1` / `localhost` / `::1`) on the bound port — a foreign Host is rejected with 403 before any handler runs, so a webpage pointing a domain at 127.0.0.1 (DNS rebinding) cannot reach the key-holding API. `CUPBEARER_ALLOW_LAN=1` skips the guard along with the bind restriction.
+
 Keys may also come from the environment or a `.env` file (`.env` in the working directory is read by the setup wizard; `GROQ_API_KEY`, `GEMINI_API_KEY`, …) — the wizard offers them as defaults and stores what it uses in `secrets.json`.
 
 ## Settings reference (all validated; unknown keys rejected)
@@ -95,6 +97,6 @@ Copy the home directory (stop the gateway first or accept a torn SQLite WAL): `c
 ## Tests & smoke
 
 ```bash
-npm test      # 226 unit tests, no keys needed
+npm test      # 265 unit tests, no keys needed
 npm run smoke # boots stub upstreams + the real gateway, pushes traffic through failover + streaming
 ```
