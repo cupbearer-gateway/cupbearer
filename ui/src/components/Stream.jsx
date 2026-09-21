@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react"
 import { api, subscribeEvents } from "../api.js"
-import { ago, compact, ms } from "../format.js"
+import { ago, compact, ms, reasonLabel } from "../format.js"
 import { Card, Empty, Stat } from "./ui.jsx"
 import Seal from "./Seal.jsx"
 import { IconLayers } from "./icons.jsx"
@@ -53,6 +53,15 @@ function Row({ r, onClick, active }) {
       </td>
       <td className="py-2.5 pr-3 align-middle tnum">
         <span className="text-[var(--color-ink)]">{r.poolId}</span>
+        {r.attempts > 1 && (
+          <span
+            className="tnum ml-1.5 rounded-[4px] px-1 py-px text-[9.5px]"
+            style={{ background: "color-mix(in oklab, var(--color-warn) 14%, transparent)", color: "var(--color-warn)" }}
+            title={`${r.attempts} attempts — failed over before this leg answered`}
+          >
+            ×{r.attempts}
+          </span>
+        )}
       </td>
       <td className="py-2.5 pr-3 align-middle tnum text-[var(--color-ink-soft)]">
         {r.providerId}/{r.model}
@@ -96,7 +105,7 @@ function TastingCard({ r }) {
     lines.push(`A response from ${r.providerId}/${r.model} scored ${r.score?.toFixed(2)} — below the bar. The client never saw it; a stronger leg answered instead.`)
     lines.push(`Gate reason: ${r.message || "quality below threshold"}.`)
   } else if (verdict === "failed") {
-    lines.push(`${r.providerId}/${r.model} failed: ${r.reason || "error"}${r.message ? ` — ${r.message}` : ""}.`)
+    lines.push(`${r.providerId}/${r.model} failed: ${reasonLabel(r.reason)}${r.message ? ` — ${r.message}` : ""}.`)
   } else {
     lines.push(`Served from ${r.providerId}/${r.model} — no gate active on this pool, so no tasting happened.`)
   }
@@ -181,7 +190,7 @@ export default function Stream() {
             title="No traffic yet"
             body={
               <>
-                Point any client at <span className="tnum">http://127.0.0.1:4143/v1</span> (model = one of your pool ids) and the
+                Point any client at <span className="tnum">{window.location.origin}/v1</span> (model = one of your pool ids) and the
                 stream starts here — every request, every verdict, sealed.
               </>
             }

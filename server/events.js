@@ -80,4 +80,11 @@ function on(type, fn) {
   listeners.get(type).push(fn)
 }
 
-module.exports = { subscribe, emit, clientCount, on }
+function off(type, fn) {
+  const list = listeners.get(type)
+  if (!list) return
+  const i = list.indexOf(fn)
+  if (i >= 0) list.splice(i, 1)
+}
+
+module.exports = { subscribe, emit, clientCount, on, off }

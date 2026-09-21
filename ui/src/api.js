@@ -99,7 +99,7 @@ export const api = {
  */
 export function subscribeEvents(onEvent) {
   const source = new EventSource("/api/events")
-  const types = ["attempt", "success", "failure", "gate", "pools", "providers"]
+  const types = ["attempt", "success", "failure", "gate", "pools", "providers", "settings", "revive"]
   const handlers = types.map((type) => {
     const h = (e) => {
       let data = null

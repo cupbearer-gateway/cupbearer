@@ -38,10 +38,12 @@ Keys may also come from the environment or a `.env` file (`.env` in the working 
 | `cooldownBaseSeconds` / `cooldownMaxSeconds` | 20 / 600 | rate-limit backoff window (exponential) |
 | `deadAfterFailures` | 3 | consecutive total non-responses before a key is `dead` |
 | `errorPullAfterFailures` | 3 | consecutive 5xx/408s before a key is pulled |
+| `legRetries` | 1 | immediate same-provider retries on a transient upstream error (5xx/timeout) before failing over |
 | `maxKeysPerLeg` | 8 | keys tried per provider per request |
 | `attemptTimeoutMs` / `requestBudgetMs` | 90000 / 180000 | per-attempt and whole-request ceilings |
 | `firstChunkTimeoutMs` / `chunkTimeoutMs` | 30000 / 60000 | stream waits (pre-commit / mid-stream) |
-| `reviveProbe` / `reviveIntervalMinutes` / `reviveMaxPerTick` | true / 5 / 20 | background re-probe of sticky keys |
+| `reviveProbe` / `reviveIntervalMinutes` / `reviveMaxPerTick` | true / 5 / 20 | background re-probe of pulled keys |
+| `reviveSoonMs` | 20000 | fast lane: re-probe a key/route this soon after it is pulled, backing off up to the sweep interval |
 | `canaryEnabled` / `canaryIntervalMinutes` | false / 15 | quiet probing of healthy keys |
 | `notifyFailover` / `notifyCooldownMinutes` | true / 2 | Windows toasts on failover (per-source cooldown) |
 | `metricsRetainDays` | 14 | SQLite log retention |

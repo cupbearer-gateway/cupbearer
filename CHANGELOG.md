@@ -2,6 +2,29 @@
 
 All notable changes to Cupbearer are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [0.2.0] — 2026-09-21
+
+The failover-and-recovery overhaul: faster to fail over, faster to come back, and honest about why.
+
+### Added
+- Same-leg retry (`legRetries`, default 1): a transient upstream error (5xx / 408) is retried once on the same provider before the request fails over, absorbing per-second upstream flaps without paying the next leg's latency. `0` restores fail-first behavior.
+- Fast-lane recovery (`reviveSoonMs`, default 20000): the moment a key or (key, model) route is pulled, a re-probe is scheduled ~20s out with the exact model that failed; a success returns it to rotation (with a "Provider is back" toast). Failed fast probes back off up to the sweep interval, where the periodic revive sweep takes over.
+- `POST /api/rotation/restart` now returns what it cleared (`{keys, routes}`) and the dashboard says so; a no-op click is distinguishable from a real clear.
+
+### Fixed
+- **Restart rotation actually restarts rotation.** It cleared only sticky states — rate-limited (`cooling`) keys, the most common reason a first provider is skipped, stayed out of rotation for up to 10 minutes, so the next request still started at provider 2. Now every non-healthy state (cooling, degraded streaks, sticky pulls, model routes) returns to rotation.
+- **Rotation cursors are per (provider, model).** One provider serving several legs of a pool with different models (agentrouter → deepseek AND glm) shared one cursor: the legs stole each other's starting offset within a single dispatch, and a failure on one model's leg reordered the other model's key rotation.
+- **Dashboard leg health is model-aware.** Per-leg "n/m keys usable" counted keys pulled for that leg's exact model as usable; the dashboard now agrees with what the router will actually do. Pool key totals count distinct keys, so a provider on two legs is no longer double-counted.
+- **Editing a pool no longer wipes leg `tier`/`capabilities`** (which silently disabled the quality gate and capability filtering for the whole pool).
+- **`notifyCooldownMinutes: 0` means no cooldown** (it silently became 10 minutes). **"Keep call history" is honored** (the knob wrote `metricsRetainDays`; retention read `storeRetainDays`).
+- **Toast icon**: regenerated `cupbearer-toast.png` at 256px with the seal filling the frame (`scripts/make-toast.ps1`, derived from the logo) and `hint-crop="none"` — the emblem no longer renders as a tiny/shrunken mark at toast scale.
+- Cross-process test flake: test suites now run against an isolated `CUPBEARER_HOME` instead of racing the live gateway's health-state file.
+- Hardened `serveStatic` path check against sibling-directory prefixes; provider deletion resets rotation cursors like other mutations.
+
+### Dashboard
+- Keys on multi-model providers get a test-model picker (a key can be fine for one model and out of quota for another); rate-limited keys expose a Reset button.
+- Pools grid: one health segment per key (deduped across legs), "Edit legs" label on what opens the leg editor; cooling keys join the "out of rotation" banner; Stream shows plain-English failure reasons, the failover attempt count (×N), and the actual origin the client should point at.
+
 ## [0.1.0] — 2026-09-06
 
 The open-source rebuild of an internal gateway ("Conflux"). Public v1.

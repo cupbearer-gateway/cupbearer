@@ -1,5 +1,9 @@
 "use strict"
 
+// Isolation: never touch the live gateway's real config dir — the running
+// server writes the same files this suite does, and both would race.
+process.env.CUPBEARER_HOME = require("node:os").tmpdir() + require("node:path").sep + "cupbearer-test-" + process.pid
+
 const test = require("node:test")
 const assert = require("node:assert")
 const config = require("./config")

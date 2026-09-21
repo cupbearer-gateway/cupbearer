@@ -76,8 +76,10 @@ export default function Operations({ settings: initialSettings, onChanged }) {
     setBusy(name)
     setError(null)
     try {
-      await fn()
-      flash(okMsg)
+      const result = await fn()
+      // okMsg may be a function of the server's response so the confirmation
+      // can say what actually happened (e.g. how many keys were cleared).
+      flash(typeof okMsg === "function" ? okMsg(result) : okMsg)
       onChanged?.()
       if (name === "canary") await loadCanary()
     } catch (e) {
@@ -104,9 +106,20 @@ export default function Operations({ settings: initialSettings, onChanged }) {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => run("rotation", () => api.restartRotation(), "Rotation restarted — keys cleared and tried from the top")}
+            onClick={() =>
+              run(
+                "rotation",
+                () => api.restartRotation(),
+                (r) => {
+                  const n = (r?.keys || 0) + (r?.routes || 0)
+                  return n
+                    ? `Rotation restarted — ${n} stuck key${n === 1 ? "" : "s"}/${n === 1 ? "route" : "routes"} cleared. Next request starts from the first provider.`
+                    : "Rotation restarted — nothing was stuck. Next request starts from the first provider."
+                },
+              )
+            }
             disabled={busy}
-            title="Clear stuck keys and start every pool from its first provider"
+            title="Clear stuck and rate-limited keys, then start every pool from its first provider"
           >
             {busy === "rotation" && <Spinner />}
             <span className="flex items-center gap-1.5">
@@ -200,6 +213,9 @@ export default function Operations({ settings: initialSettings, onChanged }) {
           <Field label="Error streak before a key is pulled" hint="consecutive server errors · default 3">
             <Input type="number" value={settings.errorPullAfterFailures ?? 3} onChange={(e) => num("errorPullAfterFailures", e.target.value)} />
           </Field>
+          <Field label="Same-provider retries on an upstream error" hint="before failing over to the next provider · default 1 · 0 disables">
+            <Input type="number" value={settings.legRetries ?? 1} onChange={(e) => num("legRetries", e.target.value)} />
+          </Field>
           <Field label="Keys tried per provider, per request" hint="default 8 — stops a broken provider eating the whole budget">
             <Input type="number" value={settings.maxKeysPerLeg ?? 8} onChange={(e) => num("maxKeysPerLeg", e.target.value)} />
           </Field>
@@ -221,7 +237,9 @@ export default function Operations({ settings: initialSettings, onChanged }) {
             />
             <span>
               <span className="font-medium text-[var(--color-ink)]">Retry dead keys automatically</span>
-              <span className="ml-1 text-[var(--color-ink-faint)]">— brings back keys you've topped up or fixed</span>
+              <span className="ml-1 text-[var(--color-ink-faint)]">
+                — rechecks a dropped provider ~20s later, then on a slower schedule; brings back keys you've topped up or fixed
+              </span>
             </span>
           </label>
 

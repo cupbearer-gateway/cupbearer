@@ -1,4 +1,8 @@
 "use strict"
+
+// Isolation: never touch the live gateway's real config dir — the running
+// server writes the same files this suite does, and both would race.
+process.env.CUPBEARER_HOME = require("node:os").tmpdir() + require("node:path").sep + "cupbearer-test-" + process.pid
 // DOC: ../docs/architecture.md → § Module map → server/revive.js
 
 // revive.js re-probes sticky keys in the background so a fixed or topped-up
@@ -185,4 +189,80 @@ test("revives a model-scoped pull with the exact model and keeps the key in rota
   const snap = health.snapshot(KEY)
   assert.strictEqual(snap.state, "healthy", "key-level state must survive a model-scoped recovery")
   assert.deepStrictEqual(snap.modelStates, [], "the revived model route must be back in rotation")
+})
+
+// ---------------------------------------------------------------------------
+// Fast lane: a pulled key/route is re-probed ~20s after the drop, not at the
+// next sweep. These tests shrink reviveSoonMs so the wait is milliseconds.
+// ---------------------------------------------------------------------------
+
+test("fast lane: schedule() probes the exact model after the delay and restores it", async () => {
+  health.reset()
+  health.markFailure(KEY, { reason: "rate_limited", keyState: "cooling", scope: "key", message: "429" }, "claude-opus-5")
+  assert.strictEqual(health.isUsable(KEY), false, "precondition: the key is cooling")
+  const restores = [
+    fakeConfig({ reviveSoonMs: 40, cooldownBaseSeconds: 20, cooldownMaxSeconds: 600 }),
+    fakeOutbound(true),
+    fakeNotify(),
+  ]
+  test.after(() => {
+    restores.forEach((r) => r())
+    health.reset()
+    health.flushStickySync()
+  })
+
+  revive.schedule(KEY, "claude-opus-5")
+  assert.strictEqual(revive.scheduled().length, 1, "one fast probe pending")
+  await new Promise((r) => setTimeout(r, 400))
+
+  assert.strictEqual(probes.length, 1, "probed once, at the fast delay")
+  assert.strictEqual(probes[0].model, "claude-opus-5")
+  assert.strictEqual(health.isUsable(KEY), true, "cooldown cleared — back in rotation")
+  assert.strictEqual(toasts.length, 1)
+  assert.strictEqual(toasts[0].title, "Provider is back")
+})
+
+test("fast lane: a failure event on a pulled route schedules the re-probe", async () => {
+  health.reset()
+  health.markFailure(
+    KEY,
+    { reason: "budget_exhausted", keyState: "exhausted", scope: "leg", message: "pool empty" },
+    "claude-opus-5",
+  )
+  const restores = [fakeConfig({ reviveSoonMs: 40, cooldownBaseSeconds: 20, cooldownMaxSeconds: 600 }), fakeOutbound(true), fakeNotify()]
+  test.after(() => {
+    restores.forEach((r) => r())
+    revive.stop()
+    health.reset()
+    health.flushStickySync()
+  })
+
+  revive.start()
+  const events = require("./events")
+  // The router emits key-level state; a model-scoped pull leaves it healthy,
+  // so the fast lane must read the pulled route off the snapshot itself.
+  events.emit("failure", { poolId: "opus-5", providerId: "tabitoken", keyId: KEY, model: "claude-opus-5", reason: "budget_exhausted", state: "healthy" })
+  assert.strictEqual(revive.scheduled().length, 1, "model-scoped pull was picked up")
+  await new Promise((r) => setTimeout(r, 400))
+
+  assert.strictEqual(probes.length, 1)
+  assert.strictEqual(probes[0].model, "claude-opus-5")
+  assert.deepStrictEqual(health.snapshot(KEY).modelStates, [], "the pulled route is back")
+})
+
+test("fast lane: a failed probe backs off instead of looping", async () => {
+  health.reset()
+  const restores = [fakeConfig({ reviveSoonMs: 30 }), fakeOutbound(false), fakeNotify()]
+  test.after(() => {
+    restores.forEach((r) => r())
+    health.reset()
+    health.flushStickySync()
+  })
+
+  revive.schedule(KEY, "claude-opus-5")
+  await new Promise((r) => setTimeout(r, 350))
+  const n = probes.length
+  assert.ok(n >= 1, "at least one probe ran")
+  assert.ok(n <= 4, "backoff keeps the probe count tiny, not a spin loop")
+  assert.strictEqual(revive.scheduled().length, 1, "still armed for the next round")
 })

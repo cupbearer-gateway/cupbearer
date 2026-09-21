@@ -1,5 +1,9 @@
 "use strict"
 
+// Isolation: never touch the live gateway's real config dir — the running
+// server writes the same files this suite does, and both would race.
+process.env.CUPBEARER_HOME = require("node:os").tmpdir() + require("node:path").sep + "cupbearer-test-" + process.pid
+
 // The Anthropic-compatible /v1/messages surface: request mapping, response
 // mapping, tool round trips, and model fallback — with the router stubbed so
 // everything stays hermetic.

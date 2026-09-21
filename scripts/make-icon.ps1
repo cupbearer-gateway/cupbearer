@@ -2,6 +2,13 @@
 # Windows asks for, then assign it to the desktop + Start Menu + Startup
 # shortcuts. Shortcuts are a mix of .url and .lnk, and the two need different
 # treatment: .url is an INI file, .lnk goes through WScript.Shell.
+#
+# ⚠ STALE: New-CupbearerBitmap below still draws the pre-rebrand mark (three
+# lanes converging on a node). The shipped brand is the gold wax-seal artwork
+# in ui/public/logo.png. Running this script AS IS would overwrite the live
+# cupbearer.ico and cupbearer-toast.png with the old mark. The toast PNG is
+# regenerated from the logo by scripts/make-toast.ps1; this script needs its
+# drawing routine replaced before it is safe to run again.
 
 Add-Type -AssemblyName System.Drawing
 

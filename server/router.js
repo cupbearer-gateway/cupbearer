@@ -97,8 +97,16 @@ function recordGateFail({ pool, provider, leg, keyId, latencyMs, streamed, attem
   })
 }
 
-// providerId -> rotation cursor
+// "providerId::model" -> rotation cursor. Keyed per MODEL, not just per
+// provider: one provider commonly serves several legs of a pool with different
+// models (agentrouter → deepseek-chat AND glm-5.3). A shared cursor let the
+// legs steal each other's starting offset within one dispatch, and a failure
+// on one model's leg reordered the other model's key rotation.
 const cursors = new Map()
+
+function cursorKey(providerId, model) {
+  return `${providerId}::${model || "*"}`
+}
 
 function keyScore(keyId) {
   const snap = health.snapshot(keyId)
@@ -130,28 +138,32 @@ function orderedKeys(provider, strategy, model) {
     const primary = scored.filter((k) => k.score <= cutoff).map((k) => k.id)
     const reserve = scored.filter((k) => k.score > cutoff).map((k) => k.id)
 
-    const start = (cursors.get(provider.id) ?? 0) % primary.length
-    cursors.set(provider.id, (start + 1) % primary.length)
+    const ck = cursorKey(provider.id, model)
+    const start = (cursors.get(ck) ?? 0) % primary.length
+    cursors.set(ck, (start + 1) % primary.length)
 
     const primaryOrdered = primary.slice(start).concat(primary.slice(0, start))
     return primaryOrdered.concat(reserve).slice(0, maxKeys)
   }
 
   if (strategy === "sticky-until-error") {
-    const start = cursors.get(provider.id) ?? 0
+    const ck = cursorKey(provider.id, model)
+    const start = cursors.get(ck) ?? 0
     return usable.slice(start % usable.length).concat(usable.slice(0, start % usable.length)).slice(0, maxKeys)
   }
 
   // round-robin (default)
-  const start = (cursors.get(provider.id) ?? 0) % usable.length
-  cursors.set(provider.id, (start + 1) % usable.length)
+  const ck = cursorKey(provider.id, model)
+  const start = (cursors.get(ck) ?? 0) % usable.length
+  cursors.set(ck, (start + 1) % usable.length)
   return usable.slice(start).concat(usable.slice(0, start)).slice(0, maxKeys)
 }
 
 function advanceCursor(provider, model) {
   const usableCount =
     (provider.keys || []).filter((k) => secrets.has(k.id) && health.isUsable(k.id, model)).length || 1
-  cursors.set(provider.id, ((cursors.get(provider.id) ?? 0) + 1) % usableCount)
+  const ck = cursorKey(provider.id, model)
+  cursors.set(ck, ((cursors.get(ck) ?? 0) + 1) % usableCount)
 }
 
 // Forget every round-robin cursor so the next request starts from the first key
@@ -312,6 +324,13 @@ function nextLeg(plan, i) {
 // keeps failing fast either way.
 const RETRY_ON_ANOTHER_LEG = new Set(["bad_request", "context_too_long"])
 
+// Transient leg-scoped failures worth one immediate same-leg retry before the
+// request moves to the next provider. Upstream 5xx blips are frequently
+// per-second flaps: the retry absorbs them without paying the next provider's
+// latency, and the next leg only sees the request if the retry fails too
+// (settings.legRetries, default 1).
+const RETRY_SAME_LEG = new Set(["upstream_error", "upstream_timeout"])
+
 function mayTryAnotherLeg(verdict, plan, i) {
   if (verdict.retry) return false
   if (!RETRY_ON_ANOTHER_LEG.has(verdict.reason)) return false
@@ -405,13 +424,18 @@ function notifyKeySwitch(pool, provider, keyId, verdict) {
 function notifyProviderFailover(pool, step, plan, i, fail) {
   const next = nextLeg(plan, i)
   const from = providerLabel(step.leg.providerId)
+  const retried = fail.retries > 0 ? ` Still failing after ${fail.retries + 1} tries.` : ""
   if (next) {
+    const sameProvider = next.leg.providerId === step.leg.providerId
+    const to = sameProvider
+      ? `trying its "${next.leg.model}" leg instead`
+      : `switched to "${providerLabel(next.leg.providerId)}"`
     emitFailover(
       pool,
       step.leg.providerId,
       `${pool.id}:${step.leg.providerId}`,
       "Switched provider",
-      `"${from}" ${reasonPhrase(fail.reason)} on "${pool.name || pool.id}" — switched to "${providerLabel(next.leg.providerId)}".`,
+      `"${from}" ${reasonPhrase(fail.reason)} on "${pool.name || pool.id}" — ${to}.${retried}`,
     )
   } else {
     emitFailover(
@@ -419,7 +443,7 @@ function notifyProviderFailover(pool, step, plan, i, fail) {
       step.leg.providerId,
       `${pool.id}:all`,
       "Pool has no working provider",
-      `"${pool.name || pool.id}" has no working provider — requests are failing.`,
+      `"${pool.name || pool.id}" has no working provider — requests are failing.${retried}`,
     )
   }
 }
@@ -472,11 +496,14 @@ async function dispatch({ pool, payload, res, signal }) {
   const gc = gate.config(pool)
   const gateMs = config.load().settings.gateTimeoutMs || 30000
   let gateFails = 0
+  // Immediate same-leg retries for transient upstream errors (RETRY_SAME_LEG).
+  const legRetries = Math.max(0, Number(config.load().settings.legRetries ?? 1))
 
   for (let i = 0; i < plan.length; i++) {
     const step = plan[i]
     let legFail = null
     let gateFailed = false
+    let legRetriesUsed = 0
     if (step.skip) {
       attempts.push({ provider: step.leg.providerId, model: step.leg.model, skipped: step.skip })
       // Every key out of rotation: the provider is down, not just this leg.
@@ -584,12 +611,25 @@ async function dispatch({ pool, payload, res, signal }) {
             return { requestError: verdict, status: opened.status || 400, attempts }
           }
 
+          // Transient upstream flap: retry this same leg before paying the
+          // next provider. See RETRY_SAME_LEG.
+          if (
+            verdict.scope === "leg" &&
+            verdict.retry &&
+            RETRY_SAME_LEG.has(verdict.reason) &&
+            legRetriesUsed < legRetries
+          ) {
+            legRetriesUsed++
+            ki-- // re-run the same key; the counter stops this from looping
+            continue
+          }
+
           // A switch is happening. Another key on this provider → key toast;
           // otherwise the leg is done and we decide provider vs pool after it.
           if (verdict.scope === "key" && ki < step.keys.length - 1) {
             notifyKeySwitch(pool, provider, keyId, verdict)
           } else {
-            legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId }
+            legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId, retries: legRetriesUsed }
           }
           if (verdict.scope === "leg") break // next provider
           advanceCursor(provider, leg.model)
@@ -728,10 +768,23 @@ async function dispatch({ pool, payload, res, signal }) {
             }
             return { requestError: verdict, status: verdict.status ?? 502, attempts }
           }
+          // Transient upstream flap: retry this same leg before paying the
+          // next provider. See RETRY_SAME_LEG.
+          if (
+            verdict.scope === "leg" &&
+            verdict.retry &&
+            RETRY_SAME_LEG.has(verdict.reason) &&
+            legRetriesUsed < legRetries
+          ) {
+            legRetriesUsed++
+            ki-- // re-run the same key; the counter stops this from looping
+            continue
+          }
+
           if (verdict.scope === "key" && ki < step.keys.length - 1) {
             notifyKeySwitch(pool, provider, keyId, verdict)
           } else {
-            legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId }
+            legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId, retries: legRetriesUsed }
           }
           if (verdict.scope === "leg") break // next provider
           advanceCursor(provider, leg.model)
@@ -957,12 +1010,25 @@ async function dispatch({ pool, payload, res, signal }) {
           return { requestError: verdict, status: out.status || 400, attempts }
         }
 
+        // Transient upstream flap: retry this same leg before paying the
+        // next provider. See RETRY_SAME_LEG.
+        if (
+          verdict.scope === "leg" &&
+          verdict.retry &&
+          RETRY_SAME_LEG.has(verdict.reason) &&
+          legRetriesUsed < legRetries
+        ) {
+          legRetriesUsed++
+          ki-- // re-run the same key; the counter stops this from looping
+          continue
+        }
+
         // A switch is happening. Another key on this provider → key toast;
         // otherwise the leg is done and we decide provider vs pool after it.
         if (verdict.scope === "key" && ki < step.keys.length - 1) {
           notifyKeySwitch(pool, provider, keyId, verdict)
         } else {
-          legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId }
+          legFail = { keyState: verdict.keyState, reason: verdict.reason, message: verdict.message, keyId, retries: legRetriesUsed }
         }
         if (verdict.scope === "leg") break
         advanceCursor(provider, leg.model)

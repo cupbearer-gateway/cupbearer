@@ -43,9 +43,12 @@ function maybe({ key, title, message }) {
   const now = Date.now()
   if (now - globalLast < minGapMs) return false
 
-  const cooldownMs = (config.load().settings.notifyCooldownMinutes || 10) * 60000
+  // Explicit 0 means "no per-source cooldown" (the global 2s gap still
+  // applies); only a missing setting falls back to the 10-minute default.
+  const cooldownSetting = config.load().settings.notifyCooldownMinutes
+  const cooldownMs = (typeof cooldownSetting === "number" && cooldownSetting >= 0 ? cooldownSetting : 10) * 60000
   const last = lastSeen.get(key)
-  if (last && now - last < cooldownMs) return false
+  if (cooldownMs > 0 && last && now - last < cooldownMs) return false
 
   lastSeen.set(key, now)
   globalLast = now

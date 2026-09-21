@@ -1,5 +1,9 @@
 "use strict"
 
+// Isolation: never touch the live gateway's real config dir — the running
+// server writes the same files this suite does, and both would race.
+process.env.CUPBEARER_HOME = require("node:os").tmpdir() + require("node:path").sep + "cupbearer-test-" + process.pid
+
 // Tiered routing: the profiler's requirement reorders legs so the cheapest
 // sufficient leg serves the request, capability-insufficient legs fall back,
 // and pools without tiers route in declared order exactly as before.

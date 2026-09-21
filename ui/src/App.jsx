@@ -174,8 +174,10 @@ export default function App() {
   const settings = data?.settings
 
   const brokenPools = pools.filter((p) => p.health.usableLegs === 0)
+  // Out of rotation = sticky pulls AND rate-limited keys still cooling down —
+  // both are skipped by the router right now.
   const deadKeys = providers.flatMap((p) =>
-    p.keys.filter((k) => k.sticky).map((k) => ({ provider: p, key: k })),
+    p.keys.filter((k) => k.sticky || k.state === "cooling").map((k) => ({ provider: p, key: k })),
   )
 
   const showTopBar = view.name !== "pool"
@@ -334,7 +336,7 @@ export default function App() {
                   {deadKeys.length} key{deadKeys.length > 1 ? "s" : ""} out of rotation:{" "}
                   {deadKeys
                     .slice(0, 3)
-                    .map(({ provider, key }) => `${provider.label} · ${key.label}`)
+                    .map(({ provider, key }) => `${provider.label} · ${key.label}${key.state === "cooling" ? " (cooling)" : ""}`)
                     .join(", ")}
                   {deadKeys.length > 3 && ` +${deadKeys.length - 3} more`}
                 </Banner>

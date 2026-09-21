@@ -422,19 +422,32 @@ function clearModel(keyId, model) {
   saveStickyState()
 }
 
-// Return every sticky key to rotation (manual "restart rotation" action).
-// Counters are kept; only the state flag resets, so the next request tries the
-// first provider again from the top.
+// Return every key and model route to rotation (manual "restart rotation"
+// action). Counters are kept; only state flags reset. This deliberately clears
+// MORE than sticky states: cooling (rate-limit cooldowns) and degraded streaks
+// too, because the button's contract is "assume everything is fine again and
+// start every pool from its first provider" — a first provider that is still
+// cooling would be skipped and the button would look broken. Returns how many
+// key-level and model-scoped records were cleared so the UI can say what
+// actually happened.
 function clearSticky() {
-  for (const keyId of [...states.keys()]) {
-    if (STICKY.has(effectiveState(states.get(keyId)))) clear(keyId)
+  let keys = 0
+  let routes = 0
+  for (const rec of modelStates.values()) {
+    if (effectiveState(rec) !== "healthy") routes++
   }
-  for (const [key, rec] of [...modelStates.entries()]) {
-    if (STICKY.has(effectiveState(rec)) || effectiveState(rec) === "unavailable") {
-      modelStates.delete(key)
+  for (const keyId of [...states.keys()]) {
+    if (effectiveState(states.get(keyId)) !== "healthy") {
+      clear(keyId) // also wipes this key's model-scoped records
+      keys++
     }
   }
+  // Keys that stayed healthy may still carry pulled model routes.
+  for (const [key, rec] of [...modelStates.entries()]) {
+    if (effectiveState(rec) !== "healthy") modelStates.delete(key)
+  }
   saveStickyState()
+  return { keys, routes }
 }
 
 function forget(keyId) {

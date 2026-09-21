@@ -1,5 +1,9 @@
 "use strict"
 
+// Isolation: never touch the live gateway's real config dir — the running
+// server writes the same files this suite does, and both would race.
+process.env.CUPBEARER_HOME = require("node:os").tmpdir() + require("node:path").sep + "cupbearer-test-" + process.pid
+
 // The core regression test for model-scoped health: a failure on ONE model
 // route (quota, no channel, model errors) must pull exactly that (key, model)
 // pair — never the whole key for every model it serves.
@@ -151,4 +155,22 @@ test("model-scoped sticky state persists and loads back", async () => {
   // A manual full clear releases every route.
   health.clear("p:k1")
   assert.strictEqual(health.isUsable("p:k1", "model-a"), true)
+})
+test("restart rotation returns cooling and degraded keys to rotation too", () => {
+  const restore = stubSettings({ cooldownBaseSeconds: 60, cooldownMaxSeconds: 60 })
+  test.after(restore)
+
+  // One key rate limited (cooling, key-scoped), one key with a degraded streak
+  // on a model route, one with an exhausted model route.
+  health.markFailure("p:k1", { reason: "rate_limited", keyState: "cooling", scope: "key", message: "429" }, "model-a")
+  health.markFailure("p:k2", { reason: "upstream_error", keyState: "degraded", scope: "leg", message: "500" }, "model-a")
+  health.markFailure("p:k3", { reason: "budget_exhausted", keyState: "exhausted", scope: "leg", message: "empty" }, "model-b")
+  assert.strictEqual(health.isUsable("p:k1", "model-a"), false)
+
+  const cleared = health.clearSticky()
+  assert.ok(cleared.keys >= 1, "the cooling key is counted")
+  assert.ok(cleared.routes >= 2, "both pulled model routes are counted")
+  assert.strictEqual(health.isUsable("p:k1", "model-a"), true, "cooling key is back in rotation")
+  assert.strictEqual(health.isUsable("p:k2", "model-a"), true, "degraded streak reset")
+  assert.strictEqual(health.isUsable("p:k3", "model-b"), true, "exhausted route cleared")
 })

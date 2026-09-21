@@ -108,7 +108,9 @@ function esc([string]$s) { return [System.Security.SecurityElement]::Escape($s) 
 # shows. (Used by toast providers in the Action Center too.)
 $appLogo = ""
 if ($toastPng) {
-  $appLogo = "`n      <image placement=`"appLogoOverride`" src=`"$(([System.Uri]$toastPng).AbsoluteUri)`"/>"
+  # hint-crop="none": the PNG carries its own rounded tile — never let Windows
+  # mask it into a circle (the default for appLogoOverride on some builds).
+  $appLogo = "`n      <image placement=`"appLogoOverride`" hint-crop=`"none`" src=`"$(([System.Uri]$toastPng).AbsoluteUri)`"/>"
 }
 $toastXml = @"
 <?xml version="1.0" encoding="utf-8"?>

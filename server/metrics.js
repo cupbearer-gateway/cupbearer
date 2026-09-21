@@ -26,7 +26,9 @@ function scheduleRetention() {
   if (retentionTimer) return
   const run = () => {
     const cfg = require("./config").load()
-    store.prune(cfg.settings.storeRetainDays ?? 30)
+    // metricsRetainDays is the dashboard knob; storeRetainDays is kept as an
+    // alias for configs written before it existed.
+    store.prune(cfg.settings.metricsRetainDays ?? cfg.settings.storeRetainDays ?? 30)
   }
   run()
   retentionTimer = setInterval(run, 24 * 3600 * 1000)

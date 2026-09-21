@@ -43,8 +43,12 @@ function serveStatic(req, res, url) {
   const rel = url.pathname === "/" ? "index.html" : url.pathname.slice(1)
   const target = path.join(UI_DIST, rel)
 
-  // Refuse to serve outside the bundle directory.
-  if (!path.resolve(target).startsWith(path.resolve(UI_DIST))) {
+  // Refuse to serve outside the bundle directory. Compared against
+  // UI_DIST + separator so a sibling like "dist-evil" cannot pass the prefix
+  // check; equality is allowed for the directory itself.
+  const distRoot = path.resolve(UI_DIST)
+  const resolved = path.resolve(target)
+  if (resolved !== distRoot && !resolved.startsWith(distRoot + path.sep)) {
     return error(res, 403, "forbidden")
   }
 

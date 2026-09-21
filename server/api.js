@@ -62,7 +62,10 @@ function poolView(p, { slim = false } = {}) {
   const legs = p.legs.map((leg) => {
     const provider = config.getProvider(leg.providerId)
     const keys = provider ? (provider.keys || []).map((k) => keyView(provider.id, k)) : []
-    const usableCount = keys.filter((k) => k.usable).length
+    // Usability for THIS leg's model, not the key in general: a key pulled for
+    // one model (that model's budget pool is empty) still serves its other
+    // models — the dashboard must agree with what the router will actually do.
+    const usableCount = keys.filter((k) => health.isUsable(k.id, leg.model)).length
     return {
       providerId: leg.providerId,
       providerLabel: provider?.label || leg.providerId,
@@ -76,6 +79,10 @@ function poolView(p, { slim = false } = {}) {
       keyCount: keys.length,
     }
   })
+  // Distinct keys across legs: a provider serving two legs of one pool (the
+  // same provider, two models) must not be counted twice.
+  const distinct = new Map()
+  for (const leg of legs) for (const k of leg.keys || []) if (!distinct.has(k.id)) distinct.set(k.id, k)
   return {
     id: p.id,
     name: p.name || p.id,
@@ -85,8 +92,8 @@ function poolView(p, { slim = false } = {}) {
     health: {
       usableLegs: legs.filter((l) => l.providerEnabled && l.usableKeyCount > 0).length,
       totalLegs: legs.length,
-      usableKeys: legs.reduce((n, l) => n + l.usableKeyCount, 0),
-      totalKeys: legs.reduce((n, l) => n + l.keyCount, 0),
+      usableKeys: [...distinct.values()].filter((k) => k.usable).length,
+      totalKeys: distinct.size,
     },
   }
 }
@@ -307,6 +314,7 @@ async function handle(req, res, url) {
         secrets.remove(id)
         health.forget(id)
       }
+      router.resetCursors()
       events.emit("providers", { action: "deleted", id: providerId })
       json(res, 200, { ok: true })
       return true
@@ -524,13 +532,14 @@ async function handle(req, res, url) {
   }
 
   // ---- rotation -----------------------------------------------------------
-  // Manual restart: clear every sticky key and forget cursors so the next
-  // request starts calling providers from the top again.
+  // Manual restart: return every key and route to rotation — sticky states,
+  // rate-limit cooldowns and degraded streaks all reset — and forget cursors,
+  // so the next request starts calling providers from the top again.
   if (seg[0] === "rotation" && seg[1] === "restart" && method === "POST") {
-    health.clearSticky()
+    const cleared = health.clearSticky()
     router.resetCursors()
-    events.emit("pools", { action: "rotation-restarted" })
-    json(res, 200, { ok: true })
+    events.emit("pools", { action: "rotation-restarted", ...cleared })
+    json(res, 200, { ok: true, ...cleared })
     return true
   }
 

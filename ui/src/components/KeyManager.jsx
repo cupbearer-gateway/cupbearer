@@ -117,7 +117,7 @@ function KeyRow({ providerId, k, testModel, onChanged }) {
         <StatePill state={k.state} meta={m} className="shrink-0" />
 
         <div className="flex shrink-0 items-center gap-1">
-          {k.sticky && (
+          {(k.sticky || k.state === "cooling") && (
             <Button size="sm" variant="ghost" onClick={() => run("clear")} disabled={busy} title="Return to rotation">
               {busy === "clear" ? <Spinner /> : "Reset"}
             </Button>
@@ -159,7 +159,10 @@ export default function KeyManager({ provider, onChanged }) {
   const [bulkText, setBulkText] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const testModel = provider.models?.[0]
+  const models = provider.models || []
+  // A provider serving several pool legs (different models) must be testable
+  // per model: "OK" against deepseek says nothing about the glm-5.3 leg.
+  const [testModel, setTestModel] = useState(models[0])
 
   async function add() {
     setBusy(true)
@@ -197,6 +200,23 @@ export default function KeyManager({ provider, onChanged }) {
 
   return (
     <div>
+      {models.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-line)] px-3 py-2 text-[11px]">
+          <span className="text-[var(--color-ink-faint)]">Test against</span>
+          <select
+            value={testModel || ""}
+            onChange={(e) => setTestModel(e.target.value)}
+            className="tnum max-w-52 truncate rounded-[5px] bg-[var(--color-base)] px-1.5 py-1 text-[11px] text-[var(--color-ink)] shadow-[inset_0_0_0_1px_var(--color-line)]"
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <span className="text-[var(--color-ink-faint)]">— a key can work for one model and be out of quota for another</span>
+        </div>
+      )}
       <div className="divide-y divide-[var(--color-line)]">
         {provider.keys.map((k) => (
           <KeyRow key={k.id} providerId={provider.id} k={k} testModel={testModel} onChanged={onChanged} />

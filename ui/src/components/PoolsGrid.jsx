@@ -75,9 +75,16 @@ function strategyChip(pool) {
 }
 
 function segmentsFor(pool) {
-  const keys = pool.legs.flatMap((l) => (l.providerEnabled ? l.keys : []))
-  return keys
-    .slice()
+  // One segment per key: a provider serving two legs of the pool (two models)
+  // used to render its keys twice.
+  const byId = new Map()
+  for (const l of pool.legs) {
+    for (const k of l.providerEnabled ? l.keys : []) {
+      const prev = byId.get(k.id)
+      if (!prev || (RANK[k.state] ?? 9) < (RANK[prev.state] ?? 9)) byId.set(k.id, k)
+    }
+  }
+  return [...byId.values()]
     .sort((a, b) => (RANK[a.state] ?? 9) - (RANK[b.state] ?? 9))
     .map((k) => {
       const m = stateMeta(k.state)
@@ -204,10 +211,10 @@ function PoolCard({ pool, onOpen, onAddLeg, index }) {
             onAddLeg(pool)
           }}
           className="flex items-center gap-1 rounded-[5px] bg-[var(--color-overlay)] px-2 py-1 text-[11px] font-medium text-[var(--color-accent-soft)] transition-colors hover:bg-[var(--color-accent-dim)] hover:text-white"
-          title="Add a provider or leg directly to this pool"
+          title="Edit this pool's legs — add another provider or model"
         >
           <IconPlus size={11} />
-          <span>Add Provider</span>
+          <span>Edit legs</span>
         </button>
       </div>
     </div>

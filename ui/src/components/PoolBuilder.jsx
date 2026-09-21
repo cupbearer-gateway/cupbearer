@@ -313,7 +313,17 @@ export default function PoolBuilder({ open, onClose, providers, editing, onSaved
       setId(editing.id)
       setIdTouched(true)
       setKeyStrategy(editing.keyStrategy || "round-robin")
-      setLegs(editing.legs.map((l) => ({ providerId: l.providerId, model: l.model })))
+      // Preserve tier/capabilities: they are not editable here (hand-set in
+      // config for tiered routing), and dropping them silently disabled the
+      // quality gate and capability filtering for the whole pool.
+      setLegs(
+        editing.legs.map((l) => ({
+          providerId: l.providerId,
+          model: l.model,
+          ...(l.tier != null ? { tier: l.tier } : {}),
+          ...(l.capabilities?.length ? { capabilities: l.capabilities } : {}),
+        })),
+      )
     } else {
       setName("")
       setId("")

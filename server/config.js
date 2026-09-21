@@ -25,6 +25,10 @@ const DEFAULT_CONFIG = {
     // pulled (dead) so the router stops re-trying it first and moves down the
     // pool. Self-heals via the revive probe once the provider answers again.
     errorPullAfterFailures: 3,
+    // Immediate same-provider retries on a transient upstream error (5xx /
+    // timeout) before the request fails over to the next leg. Absorbs per-second
+    // upstream flaps without paying the next provider's latency.
+    legRetries: 1,
     // Desktop toast whenever a request switches key or provider (rate limit,
     // key exhausted, rejected key, …) or the pool is down.
     notifyFailover: true,
@@ -35,6 +39,9 @@ const DEFAULT_CONFIG = {
     // recovered provider comes back into rotation on its own.
     reviveProbe: true,
     reviveIntervalMinutes: 5,
+    // Fast lane: re-probe a key/route this soon after it is pulled, so a blip
+    // is back in rotation in ~20s instead of waiting for the next sweep.
+    reviveSoonMs: 20000,
     // --- time budgets -------------------------------------------------------
     // Ceiling on ONE attempt's wait for the upstream's first response. Measured
     // over 3380 successful calls: p50 5.1s, p95 25.7s, p99 68.8s, and no
@@ -155,6 +162,9 @@ function validate(cfg) {
     if (typeof s.errorPullAfterFailures !== "number" || s.errorPullAfterFailures < 1 || s.errorPullAfterFailures > 20) {
       errors.push("settings.errorPullAfterFailures must be a number between 1 and 20")
     }
+    if (typeof s.legRetries !== "number" || s.legRetries < 0 || s.legRetries > 5) {
+      errors.push("settings.legRetries must be a number between 0 and 5")
+    }
     if (typeof s.notifyFailover !== "boolean") {
       errors.push("settings.notifyFailover must be a boolean")
     }
@@ -166,6 +176,9 @@ function validate(cfg) {
     }
     if (typeof s.reviveIntervalMinutes !== "number" || s.reviveIntervalMinutes < 1 || s.reviveIntervalMinutes > 1440) {
       errors.push("settings.reviveIntervalMinutes must be a number between 1 and 1440")
+    }
+    if (typeof s.reviveSoonMs !== "number" || s.reviveSoonMs < 1000 || s.reviveSoonMs > 120000) {
+      errors.push("settings.reviveSoonMs must be a number between 1000 and 120000")
     }
     if (typeof s.attemptTimeoutMs !== "number" || s.attemptTimeoutMs < 500 || s.attemptTimeoutMs > 600000) {
       errors.push("settings.attemptTimeoutMs must be a number between 500 and 600000")
