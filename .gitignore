@@ -19,3 +19,6 @@ metrics/
 
 # Benchmark runs from CI or a local `npm run benchmark`
 benchmark-ci*
+
+# Machine-local quirks (private setup; never published)
+server/quirks/aistudio-*

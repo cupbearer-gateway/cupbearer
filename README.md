@@ -8,7 +8,7 @@ One OpenAI-compatible endpoint in front of all the free-tier and paid LLM keys y
 
 MIT licensed. BYOK always: your keys stay on your machine, nothing phones home.
 
-[![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![tests](https://img.shields.io/badge/tests-254%20passing-brightgreen)]() [![Node](https://img.shields.io/badge/node-%E2%89%A522-blue)]()
+[![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![tests](https://img.shields.io/badge/tests-226%20passing-brightgreen)]() [![Node](https://img.shields.io/badge/node-%E2%89%A522-blue)]()
 
 ![Cupbearer — the tasting room: live verdicts, blocked downgrades, and the evidence log](landing/demo.gif)
 
@@ -131,7 +131,7 @@ Built-in presets: Groq · Google Gemini (AI Studio API) · Cerebras · Mistral �
 
 ## How it's built
 
-One Node process, zero runtime dependencies (storage is `node:sqlite`, built into Node ≥ 22). Plain HTTP, real streaming, an in-process React dashboard, and 254 tests that run with `npm test` on any machine — no API keys required (the smoke test uses bundled stub providers).
+One Node process, zero runtime dependencies (storage is `node:sqlite`, built into Node ≥ 22). Plain HTTP, real streaming, an in-process React dashboard, and 226 tests that run with `npm test` on any machine — no API keys required (the smoke test uses bundled stub providers).
 
 | Path | What |
 |---|---|

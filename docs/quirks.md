@@ -18,11 +18,10 @@ createStreamTranslator(ctx)        // stateful stream rewriter (at most ONE per 
 
 ## Catalog
 
+Seven ship with the repo. The registry also loads any `*.js` quirk found in `$CUPBEARER_HOME/quirks/` — machine-local quirks for private setups, living next to config.json and never published (drop your own in with the same shape and it registers on boot).
+
 | Quirk | Fixes | Hooks |
 |---|---|---|
-| `aistudio-schema` | strict upstream schema encoders: rejected JSON-Schema keywords, non-string enums, single-branch unions crashing on `items`, `$ref` dereferencing | request |
-| `aistudio-think-sig` | Gemini 3.x thought signatures: caches the per-call signature, re-injects it onto assistant `tool_calls` (and function names onto tool results) so multi-turn tool chains pass | request/response/filter |
-| `aistudio-multipart` | image/multipart upload shims for strict gateways | request |
 | `nvidia-nim` | `tools` on vision requests hard-400ing Llama vision models; omni models burning their budget thinking | request |
 | `openrouter` | reasoning-token budget burn; keepalive SSE lines committing headers early | request/filter |
 | `qwen-xml` | function calls streamed as plaintext XML (`<tool_call>…`) → structured `tool_calls` deltas + correct `finish_reason` (positional lookahead, never naive regex) | translator |

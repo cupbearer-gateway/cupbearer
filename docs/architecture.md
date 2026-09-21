@@ -29,7 +29,7 @@ Cupbearer is one Node process, one port, zero runtime dependencies. It serves:
 | `server/quality/` | evaluators (heuristics), judge (optional LLM), gate (modes + evidence) |
 | `server/store.js` | SQLite (node:sqlite) request log + decision evidence |
 | `server/metrics.js` | in-memory rolling window over the store; dashboard stats |
-| `server/quirks/` | per-provider request/response/stream shims (registry + 10 quirks) |
+| `server/quirks/` | per-provider request/response/stream shims (registry + 7 quirks, plus optional machine-local ones) |
 | `server/presets.js` | BYOK provider presets for the setup wizard |
 | `server/events.js` | in-process event bus + SSE fan-out for the dashboard |
 | `server/notify.js` · `revive.js` · `canary.js` | toasts, sticky-key revival, healthy-key canary |

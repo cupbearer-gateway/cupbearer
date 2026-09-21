@@ -17,6 +17,10 @@
 // and ordering two of them is ambiguous. Registering two is a config error we
 // surface loudly rather than silently picking one.
 
+const fs = require("fs")
+const path = require("path")
+const { ROOT } = require("../paths")
+
 const REGISTRY = new Map()
 
 for (const mod of [
@@ -27,11 +31,26 @@ for (const mod of [
   require("./sse-null"),
   require("./nvidia-nim"),
   require("./openrouter"),
-  require("./aistudio-schema"),
-  require("./aistudio-think-sig"),
-  require("./aistudio-multipart"),
 ]) {
   REGISTRY.set(mod.id, mod)
+}
+
+// Machine-local quirks live in $CUPBEARER_HOME/quirks/*.js — next to
+// config.json, never inside the repo, so private setups never ship. Each file
+// exports { id, ... } like a built-in; a broken file is skipped loudly rather
+// than taking the gateway down (a config referencing a missing quirk still
+// fails at compose() time).
+const localDir = path.join(ROOT, "quirks")
+if (fs.existsSync(localDir)) {
+  for (const f of fs.readdirSync(localDir)) {
+    if (!f.endsWith(".js") || f.endsWith(".test.js")) continue
+    try {
+      const mod = require(path.join(localDir, f))
+      if (mod?.id) REGISTRY.set(mod.id, mod)
+    } catch (e) {
+      console.error(`[cupbearer] skipping local quirk ${f}: ${e.message}`)
+    }
+  }
 }
 
 function get(id) {

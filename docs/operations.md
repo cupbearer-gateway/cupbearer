@@ -95,6 +95,6 @@ Copy the home directory (stop the gateway first or accept a torn SQLite WAL): `c
 ## Tests & smoke
 
 ```bash
-npm test      # 254 unit tests, no keys needed
+npm test      # 226 unit tests, no keys needed
 npm run smoke # boots stub upstreams + the real gateway, pushes traffic through failover + streaming
 ```

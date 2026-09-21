@@ -21,6 +21,9 @@ The failover-and-recovery overhaul: faster to fail over, faster to come back, an
 - Cross-process test flake: test suites now run against an isolated `CUPBEARER_HOME` instead of racing the live gateway's health-state file.
 - Hardened `serveStatic` path check against sibling-directory prefixes; provider deletion resets rotation cursors like other mutations.
 
+### Removed
+- The `aistudio-*` quirks moved out of the public repo — they adapt a private local gateway, not anything public. The registry now also loads machine-local quirks from `$CUPBEARER_HOME/quirks/*.js` (next to config.json, never shipped); drop your own file there and it registers on boot.
+
 ### Dashboard
 - Keys on multi-model providers get a test-model picker (a key can be fine for one model and out of quota for another); rate-limited keys expose a Reset button.
 - Pools grid: one health segment per key (deduped across legs), "Edit legs" label on what opens the leg editor; cooling keys join the "out of rotation" banner; Stream shows plain-English failure reasons, the failover attempt count (×N), and the actual origin the client should point at.

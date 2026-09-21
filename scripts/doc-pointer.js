@@ -42,9 +42,6 @@ const POINTERS = {
   "server/quirks/sse-null.js": "../../docs/quirks.md → § sse-null",
   "server/quirks/nvidia-nim.js": "../../docs/quirks.md → § nvidia-nim",
   "server/quirks/openrouter.js": "../../docs/quirks.md → § openrouter",
-  "server/quirks/aistudio-schema.js": "../../docs/quirks.md → § aistudio-schema",
-  "server/quirks/aistudio-think-sig.js": "../../docs/quirks.md → § aistudio-think-sig",
-  "server/quirks/aistudio-multipart.js": "../../docs/quirks.md → § aistudio-multipart",
 }
 
 const root = path.join(__dirname, "..")
