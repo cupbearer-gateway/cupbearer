@@ -18,10 +18,10 @@ function DecisionRow({ d }) {
       <td className="py-2 pr-3 text-[var(--color-ink-soft)]" title={new Date(d.ts).toISOString()}>
         {ago(d.ts)}
       </td>
-      <td className="py-2 pr-3 tnum">{d.poolId}</td>
+      <td className="whitespace-nowrap py-2 pr-3 tnum">{d.poolId}</td>
       <td className="py-2 pr-3">
         <span
-          className="inline-flex items-center rounded-[5px] px-1.5 py-[3px] text-[10.5px] font-medium leading-none"
+          className="inline-flex whitespace-nowrap items-center rounded-[5px] px-1.5 py-[3px] text-[10.5px] font-medium leading-none"
           style={{
             background: blocked ? "color-mix(in oklab, var(--color-bad) 14%, transparent)" : "color-mix(in oklab, var(--color-ok) 12%, transparent)",
             color: blocked ? "var(--color-bad)" : "var(--color-ok)",
@@ -30,10 +30,10 @@ function DecisionRow({ d }) {
           {blocked ? "blocked & rerouted" : passed ? (d.mode === "gate" ? "gate passed" : "shadow ok") : "shadow fail"}
         </span>
       </td>
-      <td className="py-2 pr-3 tnum">
+      <td className="whitespace-nowrap py-2 pr-3 tnum">
         {d.providerId}/{d.model}
       </td>
-      <td className="py-2 pr-3 tnum text-[var(--color-ink-soft)]">
+      <td className="whitespace-nowrap py-2 pr-3 tnum text-[var(--color-ink-soft)]">
         {d.downgrade ? `yes${d.requiredTier != null ? ` (need T${d.requiredTier})` : ""}` : "no"}
       </td>
       <td className="py-2 pr-3 tnum" title={`threshold ${d.threshold}`}>
@@ -78,16 +78,28 @@ export default function Quality({ pools }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="brand-serif text-[15px] font-semibold">Every verdict, on the record</h2>
-        <Select value={pool} onChange={(e) => setPool(e.target.value)} className="w-[180px] shrink-0" aria-label="Filter by pool">
-          <option value="">all pools</option>
-          {(pools || []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.id}
-            </option>
-          ))}
-        </Select>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="brand-serif text-[15px] font-semibold">Every verdict, on the record</h2>
+          <p className="text-[11.5px] text-[var(--color-ink-faint)]">
+            What the quality gate decided for each attempt — logged checks and blocks.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[11px] text-[var(--color-ink-faint)]">Pool</span>
+          {/* w-full lives on the select's base classes; a sized wrapper is the
+              reliable way to constrain it without fighting utility order. */}
+          <div className="w-[200px]">
+            <Select value={pool} onChange={(e) => setPool(e.target.value)} aria-label="Filter by pool">
+              <option value="">all pools</option>
+              {(pools || []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
       </div>
 
       {summary && (
