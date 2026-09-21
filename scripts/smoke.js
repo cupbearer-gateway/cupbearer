@@ -158,8 +158,12 @@ async function main() {
     const b1 = await r1.json()
     check("non-stream completion succeeds after failover", r1.status === 200, `status ${r1.status} ${JSON.stringify(b1).slice(0, 200)}`)
     check("response content comes from the healthy stub", b1.choices?.[0]?.message?.content === "hello from stub", JSON.stringify(b1.choices?.[0]))
-    check("pool id is reported back as the model", b1.model === "demo", b1.model)
-    check("attempt count reflects the failover", r1.headers.get("x-cupbearer-attempts") === "2", r1.headers.get("x-cupbearer-attempts"))
+    // The gateway echoes the model that actually served (the leg's model, as
+    // real OpenAI-compatible upstreams do); the pool id stays in the
+    // x-cupbearer-pool header. With the default legRetries: 1, the two-leg
+    // failover is 3 attempts: leg A, leg A same-leg retry, leg B.
+    check("serving model is reported back as the model", b1.model === "stub-model", b1.model)
+    check("attempt count reflects the failover", r1.headers.get("x-cupbearer-attempts") === "3", r1.headers.get("x-cupbearer-attempts"))
     check("serving provider is exposed in a response header", r1.headers.get("x-cupbearer-provider") === "stub-b", r1.headers.get("x-cupbearer-provider"))
 
     // 3. streaming through the relay

@@ -329,7 +329,7 @@ async function main() {
       require("../server/index.js")
     } else if (command === "benchmark") {
       // benchmark.js parses its own flags out of argv ("benchmark" itself is skipped)
-      require("./benchmark.js").main()
+      await require("./benchmark.js").main()
     } else if (command === "doctor") {
       await doctor()
     } else {

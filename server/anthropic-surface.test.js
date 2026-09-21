@@ -170,12 +170,23 @@ function runRequest(res, body) {
 }
 
 function fakeRes() {
-  return {
+  // Listener registry: the surface registers a res "close" abort handler, and
+  // tests that simulate a hang-up emit("close") to fire it.
+  const listeners = {}
+  const res = {
     headersSent: false,
     writableEnded: false,
     chunks: [],
     code: 0,
     body: "",
+    on(ev, fn) {
+      ;(listeners[ev] ||= []).push(fn)
+      return res
+    },
+    emit(ev) {
+      for (const fn of listeners[ev] || []) fn()
+      return true
+    },
     writeHead(code, headers) {
       this.code = code
       this.headersSent = true
@@ -189,4 +200,5 @@ function fakeRes() {
       this.writableEnded = true
     },
   }
+  return res
 }

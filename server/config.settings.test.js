@@ -6,7 +6,19 @@ process.env.CUPBEARER_HOME = require("node:os").tmpdir() + require("node:path").
 
 const test = require("node:test")
 const assert = require("node:assert")
+const fs = require("fs")
 const config = require("./config")
+const { CONFIG_FILE } = require("./paths")
+
+const MIN_PROVIDER = { id: "p1", label: "A", baseURL: "http://127.0.0.1:9/v1", models: ["m"], keys: [] }
+
+function cleanConfigFiles() {
+  for (const f of [CONFIG_FILE, `${CONFIG_FILE}.bak`]) {
+    try {
+      fs.unlinkSync(f)
+    } catch {}
+  }
+}
 
 test("validate rejects unknown settings keys", () => {
   const cfg = config.load()
@@ -40,4 +52,60 @@ test("validate accepts valid settings modifications", () => {
   valid.settings.canaryEnabled = true
   const errors = config.validate(valid)
   assert.equal(errors.length, 0)
+})
+
+// ---- durable writes + .bak recovery -----------------------------------------
+
+test("save keeps a one-generation .bak of the previous config", () => {
+  config.reset()
+  cleanConfigFiles()
+  const v1 = config.load()
+  v1.providers.push({ ...MIN_PROVIDER })
+  config.save(v1)
+  const v2 = config.load()
+  v2.providers[0].label = "B"
+  config.save(v2)
+  assert.ok(fs.existsSync(`${CONFIG_FILE}.bak`))
+  assert.equal(JSON.parse(fs.readFileSync(`${CONFIG_FILE}.bak`, "utf8")).providers[0].label, "A")
+  assert.equal(JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8")).providers[0].label, "B")
+})
+
+test("a corrupt main config boots from the .bak", () => {
+  config.reset()
+  cleanConfigFiles()
+  const v1 = config.load()
+  v1.providers.push({ ...MIN_PROVIDER })
+  config.save(v1)
+  config.save({ ...v1, providers: [] }) // .bak now holds the provider, main does not
+  fs.writeFileSync(CONFIG_FILE, "not json {")
+  config.reset()
+  assert.equal(config.load().providers[0].label, "A")
+})
+
+test("load() refuses a wrong-shape config exactly like a parse error", () => {
+  config.reset()
+  cleanConfigFiles()
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify({ version: 1, providers: "x", pools: [] }))
+  config.reset()
+  assert.throws(() => config.load(), /unreadable/)
+})
+
+test("a wrong-shape config recovers from the .bak", () => {
+  config.reset()
+  cleanConfigFiles()
+  const v1 = config.load()
+  v1.providers.push({ ...MIN_PROVIDER })
+  config.save(v1)
+  config.save({ ...v1, providers: [] })
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify({ version: 1, providers: "x", pools: [] }))
+  config.reset()
+  assert.equal(config.load().providers[0].label, "A")
+})
+
+test("a corrupt config with no .bak still refuses to boot", () => {
+  config.reset()
+  cleanConfigFiles()
+  fs.writeFileSync(CONFIG_FILE, "not json {")
+  config.reset()
+  assert.throws(() => config.load(), /unreadable/)
 })

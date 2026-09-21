@@ -41,7 +41,33 @@ function sseEvent(obj) {
  * @returns {Promise<{tokensIn:number,tokensOut:number,finishReason:string|null,errored:boolean,verdict:object|null,errorMessage:string|null,errorBody:object|null,wrote:boolean,text:string,reasoning:string,toolCalls:object[]|null,sawToolCalls:boolean,frames?:string}>}
  */
 async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firstChunkTimeoutMs, onFirstByte, buffer: buffered = false }) {
-  const translator = applied.streamTranslator(ctx)
+  let translator = null
+  try {
+    translator = applied.streamTranslator(ctx)
+  } catch (e) {
+    // A throwing user-authored quirk must not escape as a bare 500, and the
+    // upstream body is already open — cancel it so the socket is not leaked.
+    // The verdict keeps the router's handling in step with a bad_quirks skip:
+    // pre-commit failure, the leg skipped, the key not blamed.
+    try {
+      await upstream.body?.cancel()
+    } catch {}
+    return {
+      tokensIn: 0,
+      tokensOut: 0,
+      finishReason: null,
+      errored: true,
+      verdict: { reason: "bad_quirks", keyState: "healthy", scope: "leg" },
+      errorMessage: e.message,
+      errorBody: null,
+      wrote: false,
+      sawUpstreamBytes: false,
+      text: "",
+      reasoning: "",
+      toolCalls: null,
+      sawToolCalls: false,
+    }
+  }
 
   let tokensIn = 0
   let tokensOut = 0
@@ -282,10 +308,13 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
       // gets its own (tighter) budget; afterwards a gap may just be the model
       // pausing between tool calls, and we are committed either way.
       const waitMs = sawAnyChunk ? chunkTimeoutMs : (firstChunkTimeoutMs ?? chunkTimeoutMs)
+      let timer
+      // Cleared as soon as either side settles: the losing timer used to be
+      // left armed, piling one dead timer per chunk onto the heap.
       const step = await Promise.race([
         reader.read(),
-        new Promise((_, reject) =>
-          setTimeout(
+        new Promise((_, reject) => {
+          timer = setTimeout(
             () =>
               reject(
                 new Error(
@@ -295,9 +324,10 @@ async function relay({ upstream, res, applied, ctx, chunkTimeoutMs = 60000, firs
                 ),
               ),
             waitMs,
-          ).unref?.(),
-        ),
-      ])
+          )
+          timer.unref?.()
+        }),
+      ]).finally(() => clearTimeout(timer))
       if (step.done) break
       sawAnyChunk = true
       buf += decoder.decode(step.value, { stream: true })

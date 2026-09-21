@@ -26,7 +26,12 @@ const events = require("./events")
 const api = require("./api")
 const surface = require("./openai-surface")
 const anthropic = require("./anthropic-surface")
-const { json, error } = require("./http-util")
+const { json, error, isAllowedHost } = require("./http-util")
+
+const VERSION = require("../package.json").version
+// LAN exposure is an explicit operator opt-in; when set, the loopback Host
+// guard below is skipped along with it.
+const ALLOW_LAN = process.env.CUPBEARER_ALLOW_LAN === "1"
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -78,7 +83,31 @@ function serveStatic(req, res, url) {
   })
 }
 
+// A crash between write and rename leaves `${file}.${pid}.tmp` litter in the
+// state dir (config/secrets/health writes, e.g. health-state.json.26152.tmp).
+// Best-effort sweep on boot; never fatal.
+function sweepStaleTmp() {
+  try {
+    for (const name of fs.readdirSync(ROOT)) {
+      if (!name.endsWith(".tmp")) continue
+      try {
+        fs.unlinkSync(path.join(ROOT, name))
+      } catch {}
+    }
+  } catch (e) {
+    console.error(`[cupbearer] stale .tmp sweep failed: ${e.message}`)
+  }
+}
+
 const server = http.createServer(async (req, res) => {
+  // DNS-rebinding / CSRF guard, before anything else: a webpage can point a
+  // foreign domain at 127.0.0.1 and read keys through the unauthenticated API.
+  // Only this gateway's own loopback names on the bound port may appear in Host.
+  if (!ALLOW_LAN && !isAllowedHost(req.headers.host, HOST, PORT)) {
+    res.writeHead(403, { "content-type": "text/plain; charset=utf-8" })
+    return res.end("cupbearer: forbidden Host header")
+  }
+
   const url = new URL(req.url, `http://${HOST}:${PORT}`)
 
   try {
@@ -105,6 +134,13 @@ const server = http.createServer(async (req, res) => {
         providers: cfg.providers.length,
         uptimeSeconds: Math.round(process.uptime()),
       })
+    }
+
+    // Machine-readable health for scripts and monitors (before the static
+    // fallback, which would otherwise serve dashboard HTML here). Method-guarded
+    // so non-GET falls through to the static fallback's 405.
+    if (url.pathname === "/health" && req.method === "GET") {
+      return json(res, 200, { ok: true, version: VERSION, uptimeSeconds: Math.round(process.uptime()) })
     }
 
     // ---- dashboard API ----------------------------------------------------
@@ -157,6 +193,9 @@ process.on("SIGTERM", shutdown)
 
 // Fail fast and loudly on a broken config rather than starting half-working.
 try {
+  // Clear crash litter from a previous run before anything rewrites state.
+  sweepStaleTmp()
+
   // Security boundary validation: loopback by default.
   const isLoopback = HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1"
   if (!isLoopback && process.env.CUPBEARER_ALLOW_LAN !== "1") {
@@ -190,6 +229,13 @@ try {
     revive.start()
     canary.start()
     metrics.scheduleRetention()
+    // Seed the dashboard's rolling window from the SQLite log so history
+    // survives restarts. Best-effort; never blocks boot.
+    try {
+      metrics.hydrate()
+    } catch (e) {
+      console.error(`[cupbearer] metrics hydration failed: ${e.message}`)
+    }
   })
 } catch (e) {
   console.error(`[cupbearer] refusing to start: ${e.message}`)

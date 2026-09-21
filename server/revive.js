@@ -32,6 +32,7 @@ const quirks = require("./quirks")
 
 let timer = null
 let soonTimer = null
+let kickoffTimer = null
 
 // Health states that pull a key/route and are worth a quick re-probe.
 // "degraded" is deliberately absent: a degraded key is still in rotation and
@@ -242,10 +243,11 @@ function start() {
   events.on("failure", onFailure)
 
   // First pass shortly after boot, then on the interval.
-  const kickoff = setTimeout(() => {
+  kickoffTimer = setTimeout(() => {
+    kickoffTimer = null
     probeOnce().catch(() => {})
   }, 20000)
-  if (kickoff.unref) kickoff.unref()
+  if (kickoffTimer.unref) kickoffTimer.unref()
 
   timer = setInterval(() => {
     probeOnce().catch(() => {})
@@ -256,8 +258,10 @@ function start() {
 function stop() {
   if (timer) clearInterval(timer)
   if (soonTimer) clearTimeout(soonTimer)
+  if (kickoffTimer) clearTimeout(kickoffTimer)
   timer = null
   soonTimer = null
+  kickoffTimer = null
   if (onFailure) {
     events.off("failure", onFailure)
     onFailure = null

@@ -20,6 +20,19 @@ const revive = require("./revive")
 const store = require("./store")
 const { json, error, readJsonBody } = require("./http-util")
 
+// Read a JSON request body, answering 400 itself when it will not parse.
+// Returns null once the error reply was sent, so call sites just bail:
+//   const body = await readJson(req, res)
+//   if (body === null) return true
+async function readJson(req, res) {
+  try {
+    return await readJsonBody(req)
+  } catch (e) {
+    error(res, 400, `invalid JSON body: ${e.message}`)
+    return null
+  }
+}
+
 // ---------------------------------------------------------------- serialisers
 
 function keyView(providerId, key) {
@@ -151,7 +164,8 @@ async function handle(req, res, url) {
     }
 
     if (!seg[1] && method === "POST") {
-      const body = await readJsonBody(req)
+      const body = await readJson(req, res)
+      if (body === null) return true
       const name = String(body.name || "").trim()
       if (!name) return error(res, 400, "pool name is required"), true
       const id = String(body.id || config.slugify(name))
@@ -189,7 +203,8 @@ async function handle(req, res, url) {
     if (poolId && !seg[2] && method === "PUT") {
       const pool = config.getPool(poolId)
       if (!pool) return error(res, 404, `no pool "${poolId}"`), true
-      const body = await readJsonBody(req)
+      const body = await readJson(req, res)
+      if (body === null) return true
       config.update((cfg) => {
         const p = cfg.pools.find((x) => x.id === poolId)
         if (body.name !== undefined) p.name = String(body.name).trim()
@@ -225,7 +240,8 @@ async function handle(req, res, url) {
     }
 
     if (!seg[1] && method === "POST") {
-      const body = await readJsonBody(req)
+      const body = await readJson(req, res)
+      if (body === null) return true
       const id = String(body.id || config.slugify(body.label || "")).trim()
       if (!id) return error(res, 400, "provider id or label is required"), true
       if (config.getProvider(id)) return error(res, 409, `provider "${id}" already exists`), true
@@ -271,7 +287,8 @@ async function handle(req, res, url) {
     if (providerId && !provider) return error(res, 404, `no provider "${providerId}"`), true
 
     if (provider && !seg[2] && method === "PUT") {
-      const body = await readJsonBody(req)
+      const body = await readJson(req, res)
+      if (body === null) return true
       if (body.quirks) {
         const bad = quirks.unknown(body.quirks)
         if (bad.length) return error(res, 400, `unknown quirks: ${bad.join(", ")}`), true
@@ -343,7 +360,8 @@ async function handle(req, res, url) {
       }
 
       if (seg[3] === "bulk" && method === "POST") {
-        const body = await readJsonBody(req)
+        const body = await readJson(req, res)
+        if (body === null) return true
         const incoming = Array.isArray(body.keys) ? body.keys : []
         if (!incoming.length) return error(res, 400, "keys array is required"), true
 
@@ -380,7 +398,8 @@ async function handle(req, res, url) {
       }
 
       if (!seg[3] && method === "POST") {
-        const body = await readJsonBody(req)
+        const body = await readJson(req, res)
+        if (body === null) return true
         if (!body.value) return error(res, 400, "key value is required"), true
         const keyId = nextKeyId(provider)
         config.update((cfg) => {
@@ -402,12 +421,22 @@ async function handle(req, res, url) {
       if (keyId && !keyRec) return error(res, 404, `no key "${keyId}" on ${providerId}`), true
 
       if (keyRec && !seg[4] && method === "PUT") {
-        const body = await readJsonBody(req)
+        const body = await readJson(req, res)
+        if (body === null) return true
         if (body.label !== undefined) {
+          // Re-find inside the mutator: a concurrent DELETE between the
+          // pre-read keyRec and this write must 404, not TypeError into a 500.
+          let gone = false
           config.update((cfg) => {
             const p = cfg.providers.find((x) => x.id === providerId)
-            p.keys.find((k) => k.id === keyId).label = body.label
+            const k = p && (p.keys || []).find((x) => x.id === keyId)
+            if (!k) {
+              gone = true
+              return
+            }
+            k.label = body.label
           })
+          if (gone) return error(res, 404, `no key "${keyId}" on ${providerId}`), true
         }
         if (body.value) {
           secrets.set(keyId, body.value)
@@ -591,7 +620,8 @@ async function handle(req, res, url) {
   }
 
   if (seg[0] === "settings" && method === "PUT") {
-    const body = await readJsonBody(req)
+    const body = await readJson(req, res)
+    if (body === null) return true
     try {
       config.update((cfg) => {
         cfg.settings = { ...cfg.settings, ...body }

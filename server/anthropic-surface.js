@@ -216,7 +216,10 @@ async function messages(req, res) {
   if (body.metadata?.user_id) payload.user = body.metadata.user_id
 
   const controller = new AbortController()
-  req.on("close", () => {
+  // res "close", not req: on Node >=16 req "close" fires when the body finishes
+  // reading (or not at all if the client hard-destroys mid-wait), so it never
+  // signals a premature hang-up. res "close" with writableEnded false does.
+  res.on("close", () => {
     if (!res.writableEnded) controller.abort()
   })
 

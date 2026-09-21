@@ -38,13 +38,48 @@ function joinUrl(baseURL, suffix) {
   return `${String(baseURL).replace(/\/+$/, "")}${suffix}`
 }
 
-async function readJson(res) {
-  const text = await res.text()
+// Error bodies are stringified whole into the classifier's haystack, and some
+// gateways answer with enormous HTML pages — cap the read. Success bodies are
+// read unbounded; a long completion is legitimate.
+const MAX_ERROR_BODY_BYTES = 262144
+
+async function readJson(res, maxBytes) {
+  let text = ""
+  if (maxBytes && res.body) {
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let total = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      text += decoder.decode(value, { stream: true })
+      if (total >= maxBytes) {
+        try {
+          await reader.cancel()
+        } catch {}
+        break
+      }
+    }
+    text += decoder.decode()
+  } else {
+    text = await res.text()
+  }
   try {
     return { body: JSON.parse(text), raw: text }
   } catch {
     return { body: text, raw: text }
   }
+}
+
+// A user-authored quirk threw while shaping the outbound call. Converted to the
+// classified-failure shape the router already handles: the verdict scopes it to
+// the leg with a healthy keyState (quirks are per-provider — every key fails
+// the same way, and the credential is fine), so the router skips the leg and
+// tries the next one instead of surfacing a bare 500.
+function quirkVerdict(e) {
+  e.cupbearerVerdict = { reason: "bad_quirks", keyState: "healthy", scope: "leg" }
+  return e
 }
 
 /**
@@ -58,9 +93,13 @@ async function callJson({ provider, keyId, model, payload, applied, signal, time
   }
 
   const ctx = { provider, model, stream: false, tools: payload.tools }
-  const body = applied.request({ ...payload, model }, ctx)
-  const headers = buildHeaders(provider, keyValue, applied, ctx)
-
+  let body, headers
+  try {
+    body = applied.request({ ...payload, model }, ctx)
+    headers = buildHeaders(provider, keyValue, applied, ctx)
+  } catch (e) {
+    return { ok: false, status: 0, body: null, latencyMs: 0, error: quirkVerdict(e) }
+  }
 
   const ctrl = new AbortController()
   const onAbort = () => ctrl.abort()
@@ -75,12 +114,14 @@ async function callJson({ provider, keyId, model, payload, applied, signal, time
       body: JSON.stringify(body),
       signal: ctrl.signal,
     })
-    const { body: parsed } = await readJson(res)
     const latencyMs = Date.now() - t0
 
     if (!res.ok) {
+      const { body: parsed } = await readJson(res, MAX_ERROR_BODY_BYTES)
       return { ok: false, status: res.status, body: parsed, latencyMs }
     }
+
+    const { body: parsed } = await readJson(res)
 
     // A quirk may reject a 200 whose payload is unusable (e.g. tool arguments
     // truncated mid-JSON). It throws with a cupbearerVerdict attached; treat that
@@ -122,8 +163,13 @@ async function openStream({ provider, keyId, model, payload, applied, signal, ti
   }
 
   const ctx = { provider, model, stream: true, tools: payload.tools }
-  const body = applied.request({ ...payload, model, stream: true }, ctx)
-  const headers = buildHeaders(provider, keyValue, applied, ctx)
+  let body, headers
+  try {
+    body = applied.request({ ...payload, model, stream: true }, ctx)
+    headers = buildHeaders(provider, keyValue, applied, ctx)
+  } catch (e) {
+    return { ok: false, status: 0, body: null, latencyMs: 0, error: quirkVerdict(e), abort: () => {} }
+  }
 
   const ctrl = new AbortController()
   const onAbort = () => ctrl.abort()
@@ -144,11 +190,19 @@ async function openStream({ provider, keyId, model, payload, applied, signal, ti
       body: JSON.stringify(body),
       signal: ctrl.signal,
     })
-    clearTimeout(headerTimer)
     const latencyMs = Date.now() - t0
 
+    // The header timer stays armed through the error/JSON body reads: a
+    // trickling 500 body must not wedge the attempt past its budget. It is
+    // only disarmed once the unread SSE stream is handed back — aborting after
+    // that would kill a healthy stream mid-flight.
     if (!res.ok) {
-      const { body: parsed } = await readJson(res)
+      let parsed
+      try {
+        parsed = (await readJson(res, MAX_ERROR_BODY_BYTES)).body
+      } finally {
+        clearTimeout(headerTimer)
+      }
       if (signal) signal.removeEventListener("abort", onAbort)
       return { ok: false, status: res.status, body: parsed, latencyMs, abort: () => ctrl.abort() }
     }
@@ -157,7 +211,12 @@ async function openStream({ provider, keyId, model, payload, applied, signal, ti
     // here so the relay is not left waiting for SSE frames that never come.
     const contentType = res.headers.get("content-type") || ""
     if (!contentType.includes("text/event-stream")) {
-      const { body: parsed } = await readJson(res)
+      let parsed
+      try {
+        parsed = (await readJson(res)).body
+      } finally {
+        clearTimeout(headerTimer)
+      }
       if (signal) signal.removeEventListener("abort", onAbort)
       let rewritten
       try {
@@ -176,6 +235,7 @@ async function openStream({ provider, keyId, model, payload, applied, signal, ti
       }
     }
 
+    clearTimeout(headerTimer)
     return {
       ok: true,
       status: res.status,
@@ -210,8 +270,11 @@ async function listModels({ provider, keyId, timeoutMs = 30000 }) {
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     const res = await fetch(joinUrl(provider.baseURL, "/models"), { headers, signal: ctrl.signal })
+    if (!res.ok) {
+      const { body } = await readJson(res, MAX_ERROR_BODY_BYTES)
+      return { ok: false, status: res.status, body }
+    }
     const { body } = await readJson(res)
-    if (!res.ok) return { ok: false, status: res.status, body }
     const arr = Array.isArray(body) ? body : body?.data
     if (!Array.isArray(arr)) return { ok: false, status: res.status, body }
     return { ok: true, status: res.status, models: arr.map((m) => m?.id ?? m?.name).filter(Boolean) }

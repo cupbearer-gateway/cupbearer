@@ -2,6 +2,28 @@
 
 All notable changes to Cupbearer are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [0.2.1] — 2026-09-21
+
+Robustness pass: honest failover, crash-safe writes, and the rough edges the 0.2.0 overhaul left behind.
+
+### Added
+- `/health` endpoint (next to `/healthz`).
+- **Durable atomic writes with backup recovery.** Config, secrets, and health-state temp files are fsynced before the rename; the previous config/secrets are kept as a one-generation `.bak`. A corrupt main file now boots from the backup (one log line) instead of crashing the gateway — and a valid-JSON-but-wrong-shape config (`"providers": "x"`) is refused at load exactly like a parse failure, with the same `.bak` recovery.
+- Dashboard API returns a readable 400 for malformed JSON bodies.
+- Metrics history hydrates from the SQLite log on boot.
+
+### Fixed
+- **Client-cancel abort plumbing** across both surfaces: a disconnected client now actually aborts the upstream call, and a client abort no longer marks key health.
+- **Host-header anti-rebinding check** on the local surfaces.
+- **Committed streams are no longer clamped** by the remaining request budget mid-flight (chunk timeouts); a failed upstream call's error body is read with its own short timeout.
+- **Quirk-hook errors now fail over** like any upstream error instead of 500ing the request; a stream that produces no bytes at all fails over too.
+- **`secrets.json` lockdown is safe in service contexts**: the account is resolved from the process token when `USERNAME` is unset, the grant lands before inheritance is stripped (an ACE-less, unreadable file is no longer possible), and any icacls failure leaves the default perms with one log line.
+- `mask()` no longer reveals a 5-char tail on keys shorter than 20 chars.
+- `cupbearer benchmark` failures surface through the CLI's error handler instead of an unhandled rejection.
+- The revive kickoff timer is cleared by `stop()`; the sticky-state debounce timer no longer holds the process open.
+- Smoke-test expectations updated to the 0.2.0 failover semantics (serving model echoed in the body, 3 attempts with the default same-leg retry).
+- README quickstart: the dashboard build is `npm --prefix ui install && npm --prefix ui run build` (the root has no dependencies). Architecture doc: the retention knob is `metricsRetainDays`.
+
 ## [0.2.0] — 2026-09-21
 
 The failover-and-recovery overhaul: faster to fail over, faster to come back, and honest about why.

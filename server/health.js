@@ -75,6 +75,23 @@ function modelScoped(verdict, model) {
   return verdict?.scope === "leg" && Boolean(model)
 }
 
+// Durable atomic write: fsync the temp file before the rename — a plain
+// write+rename can land a truncated file past the rename on power loss. No
+// .bak here: the contents are TTL'd observations and loadStickyState() already
+// tolerates a corrupt file (it just starts empty).
+function writeDurable(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, text, "utf8")
+  const fd = fs.openSync(tmp, "r+")
+  try {
+    fs.fsyncSync(fd)
+  } finally {
+    fs.closeSync(fd)
+  }
+  fs.renameSync(tmp, file)
+}
+
 function flushStickySync() {
   if (saveTimer) {
     clearTimeout(saveTimer)
@@ -112,16 +129,15 @@ function flushStickySync() {
       }
     }
 
-    fs.mkdirSync(path.dirname(HEALTH_STATE_FILE), { recursive: true })
-    const tmp = `${HEALTH_STATE_FILE}.${process.pid}.tmp`
-    fs.writeFileSync(tmp, JSON.stringify(persisted, null, 2) + "\n", "utf8")
-    fs.renameSync(tmp, HEALTH_STATE_FILE)
+    writeDurable(HEALTH_STATE_FILE, JSON.stringify(persisted, null, 2) + "\n")
   } catch {}
 }
 
 function saveStickyState() {
   if (saveTimer) return
   saveTimer = setTimeout(flushStickySync, 100)
+  // Debounce only — never hold the process open for it.
+  if (saveTimer.unref) saveTimer.unref()
 }
 
 // Only (re)trigger persistence after a debounce gap; sticky transitions call

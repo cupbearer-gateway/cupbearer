@@ -49,6 +49,13 @@ export default function Operations({ settings: initialSettings, onChanged }) {
   }
 
   function num(key, val) {
+    // Clearing a field removes the override: undefined is dropped from the PUT
+    // body, so the server keeps its current value. Number("") === 0 would
+    // silently save 0 and then fail validation confusingly.
+    if (String(val).trim() === "") {
+      setSettings((s) => ({ ...s, [key]: undefined }))
+      return
+    }
     const n = Number(val)
     if (!isNaN(n)) setSettings((s) => ({ ...s, [key]: n }))
   }

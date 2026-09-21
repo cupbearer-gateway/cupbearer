@@ -34,7 +34,7 @@ That's it. Any OpenAI-speaking tool now works against `http://127.0.0.1:4143/v1`
 
 ```bash
 git clone https://github.com/cupbearer-gateway/cupbearer.git
-cd cupbearer && npm install && npm run build   # installs dashboard deps, builds the bundle into dist/
+cd cupbearer && npm --prefix ui install && npm --prefix ui run build   # dashboard deps live in ui/; the bundle lands in dist/
 npm start                                      # then: scripts/cli.js setup for the wizard
 ```
 

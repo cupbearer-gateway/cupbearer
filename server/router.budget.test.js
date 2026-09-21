@@ -244,3 +244,104 @@ test("a healthy pool is unaffected by the budget", async () => {
   assert.equal(outcome.committed, true)
   assert.equal(outcome.providerId, "slow", "top leg, first try, no budget interference")
 })
+
+// ------------------------------------------------- committed streams keep their own chunk budget
+//
+// A slow FAILED leg used to leave the next leg's flowing stream an inter-chunk
+// timeout of whatever was left of the request budget (5s minSliceMs at worst),
+// killing reasoning models that legitimately pause. The budget bounds
+// time-to-commit (firstChunkSlice); an already-flowing stream gets the
+// provider's own chunkTimeoutMs, un-clamped.
+
+const STREAM_SLOW = { id: "slow", label: "Slow", enabled: true, quirks: [], keys: [{ id: "slow:key-1" }] }
+const STREAM_FAST = {
+  id: "fast",
+  label: "Fast",
+  enabled: true,
+  quirks: [],
+  chunkTimeoutMs: 3000,
+  firstChunkTimeoutMs: 30000,
+  keys: [{ id: "fast:key-1" }],
+}
+const STREAM_POOL = {
+  id: "budget-stream-pool",
+  name: "Budget Stream Pool",
+  keyStrategy: "round-robin",
+  legs: [
+    { providerId: "slow", model: "slow-model" },
+    { providerId: "fast", model: "fast-model" },
+  ],
+}
+const STREAM_PAYLOAD = { stream: true, model: "budget-stream-pool", messages: [{ role: "user", content: "hi" }] }
+
+const SETTINGS = { requestBudgetMs: 1000, attemptTimeoutMs: 90000, legRetries: 0 }
+
+function stubStreamEnv() {
+  stubEnv(SETTINGS)
+  config.load = () => ({ settings: SETTINGS, pools: [STREAM_POOL], providers: [STREAM_SLOW, STREAM_FAST] })
+  config.getProvider = (id) => ({ slow: STREAM_SLOW, fast: STREAM_FAST })[id] || null
+}
+
+test("a flowing stream keeps the provider's own chunk timeout, not the budget remainder", async () => {
+  stubStreamEnv()
+  const realOpenStream = upstream.openStream
+  try {
+    upstream.openStream = async ({ provider }) => {
+      if (provider.id === "slow") {
+        await new Promise((r) => setTimeout(r, 200))
+        return { ok: false, status: 500, body: { error: { message: "down" } }, latencyMs: 200, abort: () => {} }
+      }
+      return {
+        ok: true,
+        status: 200,
+        res: oneChunkThenSilence(),
+        latencyMs: 5,
+        ctx: { provider, model: "fast-model", stream: true, tools: [] },
+        cleanup: () => {},
+      }
+    }
+    const t0 = Date.now()
+    const outcome = await router.dispatch({ pool: STREAM_POOL, payload: STREAM_PAYLOAD, res: fakeRes() })
+    const elapsed = Date.now() - t0
+
+    assert.equal(outcome.committed, true, "the fast leg committed before the stream stalled")
+    // The provider's own inter-chunk budget is 3000ms; the budget remainder was
+    // well under half that. Pre-fix the silence was cut at the remainder.
+    assert.ok(elapsed >= 1800, `a flowing stream must not be cut at the budget remainder, ended after ${elapsed}ms`)
+    assert.ok(elapsed < 5000, `the provider chunk timeout should bound it, took ${elapsed}ms`)
+  } finally {
+    upstream.openStream = realOpenStream
+  }
+})
+
+test("the first-byte wait is still clamped to the budget remainder", async () => {
+  stubStreamEnv()
+  const realOpenStream = upstream.openStream
+  try {
+    upstream.openStream = async ({ provider }) => {
+      if (provider.id === "slow") {
+        await new Promise((r) => setTimeout(r, 200))
+        return { ok: false, status: 500, body: { error: { message: "down" } }, latencyMs: 200, abort: () => {} }
+      }
+      return {
+        ok: true,
+        status: 200,
+        res: silentBody(),
+        latencyMs: 5,
+        ctx: { provider, model: "fast-model", stream: true, tools: [] },
+        cleanup: () => {},
+      }
+    }
+    const t0 = Date.now()
+    const outcome = await router.dispatch({ pool: STREAM_POOL, payload: STREAM_PAYLOAD, res: fakeRes() })
+    const elapsed = Date.now() - t0
+
+    // Pre-commit is abandonable, so it stays bounded by the request budget:
+    // ~the remainder, never the provider's own 30s first-chunk setting.
+    assert.ok(elapsed < 2500, `the first-byte wait must stay budget-clamped, took ${elapsed}ms`)
+    assert.equal(outcome.exhausted, true)
+    assert.equal(outcome.attempts.find((a) => a.reason === "first_byte_timeout")?.provider, "fast")
+  } finally {
+    upstream.openStream = realOpenStream
+  }
+})

@@ -3,9 +3,11 @@
 
 // Config store: pools + providers. Never holds key values (see secrets.js).
 //
-// Writes are atomic (temp file + rename) so a crash mid-write cannot leave a
-// truncated config behind. An in-memory copy is the read path; disk is only
-// touched on load and on mutation.
+// Writes are durable-atomic (temp file → fsync → rename, previous file kept as
+// a one-generation .bak) so neither a crash mid-write nor a power cut can leave
+// a truncated config behind the rename. A corrupt main file boots from the
+// .bak instead of taking the gateway down. An in-memory copy is the read path;
+// disk is only touched on load and on mutation.
 
 const fs = require("fs")
 const path = require("path")
@@ -93,31 +95,78 @@ function clone(v) {
 
 // ---------------------------------------------------------------- persistence
 
+// Durable atomic write: fsync the temp file before the rename — a plain
+// write+rename can land a truncated file past the rename on power loss — and
+// keep a one-generation .bak of the previous file for boot-time recovery.
+function writeDurable(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, text, "utf8")
+  const fd = fs.openSync(tmp, "r+")
+  try {
+    fs.fsyncSync(fd)
+  } finally {
+    fs.closeSync(fd)
+  }
+  try {
+    fs.copyFileSync(file, `${file}.bak`)
+  } catch {} // first save: nothing to back up yet
+  fs.renameSync(tmp, file)
+}
+
+// Read + validate a config file. A valid-JSON-but-wrong-shape file
+// (`"providers": "x"`) boots fine and then 500s every request, so load()
+// refuses it exactly like a parse failure.
+//   missing            -> { missing: true }
+//   present, unusable  -> { error }
+//   good               -> { value: merged config }
+function readValid(file) {
+  let raw
+  try {
+    raw = fs.readFileSync(file, "utf8")
+  } catch (e) {
+    if (e.code === "ENOENT") return { missing: true }
+    return { error: e.message }
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (e) {
+    return { error: e.message }
+  }
+  const merged = { ...clone(DEFAULT_CONFIG), ...parsed }
+  merged.settings = { ...DEFAULT_CONFIG.settings, ...(parsed.settings || {}) }
+  const errors = validate(merged)
+  return errors.length ? { error: errors.join("; ") } : { value: merged }
+}
+
 function load() {
   if (cache) return cache
-  try {
-    const raw = fs.readFileSync(CONFIG_FILE, "utf8")
-    const parsed = JSON.parse(raw)
-    cache = { ...clone(DEFAULT_CONFIG), ...parsed }
-    cache.settings = { ...DEFAULT_CONFIG.settings, ...(parsed.settings || {}) }
-  } catch (e) {
-    if (e.code !== "ENOENT") {
-      // Refuse to silently clobber a config we failed to parse.
-      throw new Error(`cupbearer: ${CONFIG_FILE} exists but is unreadable: ${e.message}`)
-    }
-    cache = clone(DEFAULT_CONFIG)
+  const main = readValid(CONFIG_FILE)
+  if (main.value) {
+    cache = main.value
+    return cache
   }
-  return cache
+  if (main.missing) {
+    cache = clone(DEFAULT_CONFIG)
+    return cache
+  }
+  // Present but unusable: fall back to the one-generation backup before
+  // refusing to boot — a corrupt config must not take the gateway down.
+  const bak = readValid(`${CONFIG_FILE}.bak`)
+  if (bak.value) {
+    console.error(`cupbearer: ${CONFIG_FILE} is unusable (${main.error}) — recovered from ${CONFIG_FILE}.bak`)
+    cache = bak.value
+    return cache
+  }
+  throw new Error(`cupbearer: ${CONFIG_FILE} exists but is unreadable: ${main.error}`)
 }
 
 function save(next) {
   const errors = validate(next)
   if (errors.length) throw new Error(`cupbearer: invalid config:\n  - ${errors.join("\n  - ")}`)
 
-  fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true })
-  const tmp = `${CONFIG_FILE}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n", "utf8")
-  fs.renameSync(tmp, CONFIG_FILE)
+  writeDurable(CONFIG_FILE, JSON.stringify(next, null, 2) + "\n")
   cache = next
   return cache
 }

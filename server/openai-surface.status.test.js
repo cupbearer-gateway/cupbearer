@@ -38,6 +38,10 @@ function fakeReqRes(payload) {
   }
   const res = {
     headersSent: false,
+    // The surface registers a res "close" abort listener; fakes just absorb it.
+    on() {
+      return res
+    },
     writeHead(code) {
       this.headersSent = true
       this.code = code

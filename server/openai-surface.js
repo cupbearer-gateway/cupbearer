@@ -84,7 +84,10 @@ async function chatCompletions(req, res) {
 
   const controller = new AbortController()
   // If the client hangs up (user pressed escape), stop paying for the upstream call.
-  req.on("close", () => {
+  // Listen on res, not req: on Node >=16 req "close" fires when the body finishes
+  // reading (or not at all if the client hard-destroys mid-wait), so it never
+  // signals a premature hang-up. res "close" with writableEnded false does.
+  res.on("close", () => {
     if (!res.writableEnded) controller.abort()
   })
 

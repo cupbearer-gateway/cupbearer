@@ -72,7 +72,7 @@ State is derived from real traffic, not probing: `healthy → cooling` (rate lim
 
 ## Storage
 
-`node:sqlite` (built into Node ≥ 22 — zero native dependencies): `requests` (one row per completed call, attempts as JSON), `decisions` (quality/route evidence: score, threshold, breakdown, judge verdict, downgrade flags). WAL mode; writes batched off the request path; retention via `storeRetainDays`.
+`node:sqlite` (built into Node ≥ 22 — zero native dependencies): `requests` (one row per completed call, attempts as JSON), `decisions` (quality/route evidence: score, threshold, breakdown, judge verdict, downgrade flags). WAL mode; writes batched off the request path; retention via `metricsRetainDays`.
 
 ## State ownership
 

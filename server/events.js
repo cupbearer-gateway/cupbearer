@@ -55,7 +55,15 @@ function emit(type, payload) {
   }
 
   if (!clients.size) return
-  const frame = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`
+  // Serialise once, outside the per-client loop: a payload that cannot
+  // serialise (a circular ref) must not throw into the request path — skip the
+  // SSE fan-out silently, in-process listeners above already ran.
+  let frame
+  try {
+    frame = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`
+  } catch {
+    return
+  }
   for (const [id, client] of clients) {
     try {
       // writableLength grows when the socket cannot keep up.

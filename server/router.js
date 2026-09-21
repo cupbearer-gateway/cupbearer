@@ -262,6 +262,7 @@ const REASON_PHRASE = {
   bad_request: "rejected the request",
   not_found: "returned not found",
   truncated_tool_call: "returned a truncated tool call",
+  bad_quirks: "has a misconfigured quirk",
   unknown: "failed",
 }
 function reasonPhrase(reason) {
@@ -371,6 +372,14 @@ function timeBudget(pool) {
     chunkSlice(provider) {
       const own = provider?.chunkTimeoutMs ?? s.chunkTimeoutMs ?? upstream.DEFAULT_CHUNK_TIMEOUT_MS
       return Math.min(own, this.remaining())
+    },
+    // The inter-chunk wait for a stream that is already flowing. Deliberately
+    // NOT clamped to the request budget: once bytes are on the wire the attempt
+    // is committed, and a slow failed leg must not leave that stream a
+    // few-second timeout that kills reasoning models which legitimately pause.
+    // The budget bounds time-to-commit (firstChunkSlice), not this.
+    chunkTimeout(provider) {
+      return provider?.chunkTimeoutMs ?? s.chunkTimeoutMs ?? upstream.DEFAULT_CHUNK_TIMEOUT_MS
     },
     exhausted() {
       return this.remaining() < this.minSliceMs
@@ -569,7 +578,12 @@ async function dispatch({ pool, payload, res, signal }) {
 
         if (!opened.ok) {
           const verdict = classify({ status: opened.status, body: opened.body, error: opened.error })
-          health.markFailure(keyId, verdict, leg.model)
+          // A client hang-up is not the upstream's fault: the abort propagates
+          // into the attempt and reads like a transport failure, but marking it
+          // degraded healthy keys (3 cancels pulled one dead). Budget timeouts
+          // abort upstream's own controller, not this signal, so they still
+          // count.
+          if (!signal?.aborted) health.markFailure(keyId, verdict, leg.model)
           metrics.record({
             poolId: pool.id,
             providerId: provider.id,
@@ -691,24 +705,29 @@ async function dispatch({ pool, payload, res, signal }) {
         // A gated downgrade buffers the whole stream and only commits if the
         // quality gate passes — that is what makes the downgrade honest. The
         // buffer wait is capped by gateTimeoutMs so gating cannot out-stall a
-        // plain attempt.
+        // plain attempt. Every wait in buffered mode is still pre-commit, so
+        // both stay budget-clamped; the unbuffered stream's inter-chunk wait
+        // governs the committed phase and uses the provider's own setting.
         const useBuffer = gc.mode === "gate" && step.downgrade
         const result = await relay({
           upstream: opened.res,
           res,
           applied,
           ctx: opened.ctx,
-          chunkTimeoutMs: useBuffer ? Math.min(budget.chunkSlice(provider), gateMs) : budget.chunkSlice(provider),
+          chunkTimeoutMs: useBuffer ? Math.min(budget.chunkSlice(provider), gateMs) : budget.chunkTimeout(provider),
           firstChunkTimeoutMs: useBuffer ? Math.min(budget.firstChunkSlice(provider), gateMs) : budget.firstChunkSlice(provider),
           onFirstByte: useBuffer ? null : commit,
           buffer: useBuffer,
         })
         opened.cleanup?.()
 
-        // Nothing was flushed and the response is unusable. The client has seen
-        // nothing, so this is still a normal pre-commit failure: retryable ones
-        // fail over, and a "request"-scoped one stops with a readable reason.
-        if (result.errored && !result.wrote) {
+        // Nothing was flushed and the response is unusable — or the upstream
+        // ended cleanly without ever sending a byte, which would otherwise
+        // commit as a blank 200 event-stream. The client has seen nothing, so
+        // either way this is a normal pre-commit failure: retryable ones fail
+        // over, and a "request"-scoped one stops with a readable reason. (A
+        // buffered downgrade that succeeded is judged below, not failed here.)
+        if (!result.wrote && (result.errored || (!useBuffer && !result.sawUpstreamBytes))) {
           const verdict = result.verdict
             ? { retry: true, scope: "leg", ...result.verdict, message: result.errorMessage || result.verdict.reason }
             : result.errorBody
@@ -717,15 +736,17 @@ async function dispatch({ pool, payload, res, signal }) {
                 classify({ status: 0, body: result.errorBody })
               : {
                   // Never a single byte: the provider took the request and went
-                  // quiet. Worth naming separately from a mid-response drop —
-                  // it is the failure mode that used to read as a plain hang.
+                  // quiet (or closed the stream empty). Worth naming separately
+                  // from a mid-response drop — it is the failure mode that used
+                  // to read as a plain hang.
                   reason: result.sawUpstreamBytes ? "stream_failed" : "first_byte_timeout",
                   keyState: "degraded",
                   scope: "key",
                   retry: true,
-                  message: result.errorMessage || "Upstream stream failed",
+                  message: result.errorMessage || "upstream closed the stream without sending anything",
                 }
-          health.markFailure(keyId, verdict, leg.model)
+          // Same client-abort rule as above: a cancel is not the key's fault.
+          if (!signal?.aborted) health.markFailure(keyId, verdict, leg.model)
           metrics.record({
             poolId: pool.id,
             providerId: provider.id,
@@ -883,7 +904,9 @@ async function dispatch({ pool, payload, res, signal }) {
           streamVerdict = result.verdict
             ? { ...result.verdict, message: result.errorMessage || result.verdict.reason }
             : { reason: "stream_failed", keyState: "degraded", message: "Upstream stream failed mid-response" }
-          health.markFailure(keyId, streamVerdict, leg.model)
+          // A client hang-up mid-stream aborts the upstream read too; that is
+          // not a provider failure.
+          if (!signal?.aborted) health.markFailure(keyId, streamVerdict, leg.model)
           attempts.push({
             provider: provider.id,
             model: leg.model,
@@ -969,7 +992,8 @@ async function dispatch({ pool, payload, res, signal }) {
 
       if (!out.ok) {
         const verdict = classify({ status: out.status, body: out.body, error: out.error })
-        health.markFailure(keyId, verdict, leg.model)
+        // Same client-abort rule as above: a cancel is not the key's fault.
+        if (!signal?.aborted) health.markFailure(keyId, verdict, leg.model)
         metrics.record({
           poolId: pool.id,
           providerId: provider.id,

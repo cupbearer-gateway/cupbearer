@@ -346,3 +346,64 @@ test("an in-stream error after bytes are flushed is forwarded to the client", as
   assert.equal(out.wrote, true)
   assert.match(res.text, /"message":"boom"/)
 })
+
+test("a throwing stream translator cancels the upstream body and reads as bad_quirks", async () => {
+  // A user-authored quirk must not escape the relay as a bare 500, and the
+  // upstream body is already open — the socket has to be released.
+  let cancelled = 0
+  const upstream = { body: { cancel: async () => { cancelled++ } } }
+  const applied = {
+    keepStreamLine: () => true,
+    streamTranslator: () => {
+      throw new Error("translator exploded")
+    },
+  }
+  const res = fakeRes()
+  const out = await relay({
+    upstream,
+    res,
+    applied,
+    ctx: { provider: { id: "p" }, model: "m", stream: true, tools: TOOLS },
+    chunkTimeoutMs: 5000,
+  })
+  assert.equal(cancelled, 1, "the already-open upstream socket is released")
+  assert.equal(out.errored, true)
+  assert.equal(out.wrote, false, "nothing flushed -> the router can still fail over")
+  assert.equal(out.verdict.reason, "bad_quirks")
+  assert.equal(out.verdict.scope, "leg")
+  assert.equal(out.verdict.keyState, "healthy")
+  assert.match(out.errorMessage, /translator exploded/)
+  assert.equal(res.text, "")
+})
+
+test("per-read race timers are cleared once the relay finishes", async () => {
+  // The losing timer of each Promise.race used to be left armed — one dead
+  // timer per chunk piling onto the heap for the relay's full inter-chunk
+  // timeout. Track every 5000ms timer created while the relay runs (only the
+  // relay arms those here) and require all of them settled-and-cleared.
+  const pending = new Set()
+  const origSet = global.setTimeout
+  const origClear = global.clearTimeout
+  global.setTimeout = (...args) => {
+    const t = origSet(...args)
+    if (args[1] === 5000) pending.add(t)
+    return t
+  }
+  global.clearTimeout = (t) => {
+    pending.delete(t)
+    return origClear(t)
+  }
+  try {
+    await relay({
+      upstream: sseBody([CHUNK({ content: "hi" }), "data: [DONE]"]),
+      res: fakeRes(),
+      applied: quirks.compose([]),
+      ctx: { provider: { id: "p" }, model: "m", stream: true, tools: TOOLS },
+      chunkTimeoutMs: 5000,
+    })
+  } finally {
+    global.setTimeout = origSet
+    global.clearTimeout = origClear
+  }
+  assert.equal(pending.size, 0, `${pending.size} race timer(s) left armed`)
+})
