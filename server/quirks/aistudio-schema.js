@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../../docs/quirks.md → § The quirk interface
+// DOC: ../../docs/quirks.md → § aistudio-schema
 
 // Quirk: aistudio-schema
 //

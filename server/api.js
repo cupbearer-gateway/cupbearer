@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/api.md → § Dashboard API · § SSE events
+// DOC: ../docs/api.md → § Dashboard API · § SSE events (GET /api/events)
 
 // Dashboard REST API. Loopback-only; there is no auth layer, so the bind
 // address is the security boundary (see index.js).

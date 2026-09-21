@@ -13,6 +13,8 @@ Cupbearer is one Node process, one port, zero runtime dependencies. It serves:
 | Module | Role |
 |---|---|
 | `server/index.js` | bootstrap: routes, static serving, graceful shutdown, boot log |
+| `server/api.js` | dashboard REST routing (`/api/*`) |
+| `server/http-util.js` | JSON responses, error bodies, request-body reader |
 | `server/paths.js` | every disk location + `CUPBEARER_PORT` / `CUPBEARER_HOST` / `CUPBEARER_HOME` |
 | `server/config.js` | config store (pools/providers/settings), atomic writes, strict validation |
 | `server/secrets.js` | key values in a separate ACL-locked file; write-only through the API, masked in reads |

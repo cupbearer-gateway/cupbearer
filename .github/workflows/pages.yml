@@ -23,6 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The canonical logo lives in ui/public (the app and the icon scripts
+      # derive from it); landing gets a synced copy at deploy time instead of
+      # keeping a duplicate binary in git.
+      - name: Sync canonical logo
+        run: cp ui/public/logo.png landing/logo.png
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

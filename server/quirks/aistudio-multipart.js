@@ -1,4 +1,5 @@
 "use strict"
+// DOC: ../../docs/quirks.md → § aistudio-multipart
 
 const CONTENT_FIELDS = ["text", "inlineData", "fileData", "functionCall", "functionResponse"]
 

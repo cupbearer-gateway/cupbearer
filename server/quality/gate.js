@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/quirks.md → § The quality gate
+// DOC: ../../docs/architecture.md → § Module map → server/quality/ · ../../docs/operations.md → § Quality gate in practice
 //
 // The quality gate. The differentiator: a request is only served from (or
 // downgraded to) a cheaper leg when quality measurably holds — and every

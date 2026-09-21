@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/operations.md → § Auto-revival · ../docs/architecture.md → § Module map → server/revive.js
+// DOC: ../docs/operations.md → § Auto-revival & background probes · ../docs/architecture.md → § Module map → server/notify.js
 
 // Background re-probe of pulled keys (exhausted / rejected / dead / cooling).
 //

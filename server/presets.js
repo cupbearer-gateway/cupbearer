@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/extending.md → § Provider presets
+// DOC: ../docs/architecture.md → § Module map → server/presets.js
 //
 // Built-in provider presets for the setup wizard. Every preset is BYOK: the
 // user's own key, entered locally, stored in secrets.json, never transmitted

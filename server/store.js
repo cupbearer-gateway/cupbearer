@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/architecture.md → § Storage
+// DOC: ../docs/architecture.md → § Module map → server/store.js · § Storage
 //
 // SQLite persistence for the request log and quality decisions. Backed by
 // node:sqlite (DatabaseSync), which ships with Node >= 22 — zero native

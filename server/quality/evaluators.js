@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/quirks.md → § Quality evaluators
+// DOC: ../../docs/architecture.md → § Module map → server/quality/
 //
 // Heuristic quality evaluators: $0, synchronous signals that a response is
 // usable for the request it answers. They are not a quality oracle — they catch

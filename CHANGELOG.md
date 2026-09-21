@@ -25,6 +25,16 @@ The failover-and-recovery overhaul: faster to fail over, faster to come back, an
 - Keys on multi-model providers get a test-model picker (a key can be fine for one model and out of quota for another); rate-limited keys expose a Reset button.
 - Pools grid: one health segment per key (deduped across legs), "Edit legs" label on what opens the leg editor; cooling keys join the "out of rotation" banner; Stream shows plain-English failure reasons, the failover attempt count (×N), and the actual origin the client should point at.
 
+## [0.1.2] — 2026-09-06
+
+### Packaging
+- npm registry release. No functional changes over 0.1.0 — the per-(key, model) health work and serving-leg model reporting landed on main directly ahead of 0.2.0.
+
+## [0.1.1] — 2026-09-06
+
+### Packaging
+- npm registry release; version alignment only.
+
 ## [0.1.0] — 2026-09-06
 
 The open-source rebuild of an internal gateway ("Conflux"). Public v1.

@@ -16,3 +16,6 @@ metrics/
 .env
 .env.local
 *.tmp
+
+# Benchmark runs from CI or a local `npm run benchmark`
+benchmark-ci*

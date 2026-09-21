@@ -3,9 +3,8 @@
 
 // Quirk: qwen-xml
 //
-// Ported from ~/.config/opencode/hcnapi-proxy.js. The upstream (api.hcnsec.cn,
-// Qwen3.8-27B) accepts OpenAI-shaped requests but its responses are not
-// OpenAI-shaped:
+// The upstream (Qwen3.8-27B behind a new-api-style gateway) accepts
+// OpenAI-shaped requests but its responses are not OpenAI-shaped:
 //
 //   1. message.tool_calls is always null. Tool calls arrive as Qwen/Hermes XML
 //      inside message.content:
@@ -14,7 +13,7 @@
 //   3. Chain-of-thought is prepended to content and terminated by a bare
 //      "</think>" with no opening tag. reasoning_content is always null.
 //
-// Confirmed still true in Phase 0 probing: hcnapi returned
+// Confirmed still true in Phase 0 probing: the gateway returned
 // tool_calls=null, reasoning=null, and XML in content.
 
 const OPEN_TAG = "<tool_call>"
@@ -112,7 +111,7 @@ const AFTER_PARAM_CLOSE =
 //
 // Parameter values are arbitrary strings, so every marker the parser looks for
 // can legitimately appear inside one. Two real cases, both captured from
-// hcnapi/Qwen3.8-27B:
+// Qwen3.8-27B upstream:
 //
 //   1. A bare mention. "The tag </parameter> ends a value and <tool_call>
 //      starts a call." A non-greedy match stops at that </parameter> and

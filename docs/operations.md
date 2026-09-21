@@ -50,6 +50,22 @@ Keys may also come from the environment or a `.env` file (`.env` in the working 
 | `defaultQualityMode` | `off` | pool default when `qualityGate.mode` is unset |
 | `gateTimeoutMs` | 30000 | cap on buffered gate waits and judge calls |
 
+## Desktop notifications
+
+Windows toasts fire when the router is forced to act — a key pulled (rate limit ceiling, out of quota, rejected), a provider switch, a pool going fully down, and when a dropped provider comes back. Routine rotation inside a provider stays silent on purpose. `notifyCooldownMinutes: 0` means every event toasts (a 2s global gap still applies); `notifyFailover: false` disables them.
+
+The toast is shown by `scripts/toast.ps1` (pure PowerShell + WinRT, no modules). It maintains its own Start Menu shortcut (`Cupbearer Notifications.lnk`) so Windows has an app identity to attribute the toast to, and embeds the seal logo (`ui/public/cupbearer-toast.png`) directly in the payload. Regenerate brand assets with `scripts/make-toast.ps1` (toast PNG) and `scripts/make-ico.ps1` (the multi-size .ico). Test from the dashboard (Operations → Send test toast) or `POST /api/notify/test`.
+
+## Auto-revival & background probes
+
+Pulled keys come back on their own:
+
+- **Fast lane** — the moment a key or (key, model) route is pulled, a re-probe is scheduled `reviveSoonMs` later (default 20s) with the exact model that failed. A success returns it to rotation with a "Provider is back" toast; a failure backs off (doubling) up to the sweep interval.
+- **Slow sweep** — every `reviveIntervalMinutes` (default 5), `POST /api/revive/run`-style probing walks every still-pulled key/route once (`reviveMaxPerTick` per pass).
+- **Canary** (`canaryEnabled`, off by default) quietly probes a few healthy keys so a silently dying provider is noticed before the next real request finds it.
+
+`POST /api/rotation/restart` is the manual counterpart: it returns every key and route to rotation (including cooldowns and degraded streaks), resets rotation cursors, and reports `{ok, keys, routes}` — the next request starts from every pool's first provider again.
+
 ## Quality gate in practice
 
 1. Start in **shadow** mode (the wizard default): `qualityGate: { mode: "shadow", threshold: 0.8 }`. Serve everything, log every score, watch the Quality view.
@@ -79,6 +95,6 @@ Copy the home directory (stop the gateway first or accept a torn SQLite WAL): `c
 ## Tests & smoke
 
 ```bash
-npm test      # 238 unit tests, no keys needed
+npm test      # 254 unit tests, no keys needed
 npm run smoke # boots stub upstreams + the real gateway, pushes traffic through failover + streaming
 ```

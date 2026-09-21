@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/architecture.md → § Module map → server/relay.js · § Deferred commit · ../docs/quirks.md → § The stream translator contract
+// DOC: ../docs/architecture.md → § The deferred-commit failover contract · ../docs/quirks.md → § The stream translator contract
 
 // SSE relay: upstream stream -> client, with optional per-line filtering and
 // optional delta translation.

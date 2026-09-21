@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/architecture.md → § Request profile
+// DOC: ../docs/architecture.md → § Module map → server/profile.js
 //
 // Request profiler: infer what a request needs so the router can pick the
 // cheapest leg that can actually serve it. Purely heuristic and synchronous —

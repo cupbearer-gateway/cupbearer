@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/operations.md → § Running · § Autostart at logon · ../docs/architecture.md → § Process model
+// DOC: ../docs/operations.md → § Running · ../docs/architecture.md → § Module map → server/index.js
 
 // Cupbearer entry point.
 //

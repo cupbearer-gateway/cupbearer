@@ -8,9 +8,9 @@ One OpenAI-compatible endpoint in front of all the free-tier and paid LLM keys y
 
 MIT licensed. BYOK always: your keys stay on your machine, nothing phones home.
 
-[![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![tests](https://img.shields.io/badge/tests-238%20passing-brightgreen)]() [![Node](https://img.shields.io/badge/node-%E2%89%A522-blue)]()
+[![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![tests](https://img.shields.io/badge/tests-254%20passing-brightgreen)]() [![Node](https://img.shields.io/badge/node-%E2%89%A522-blue)]()
 
-![Cupbearer — the tasting room: live verdicts, blocked downgrades, and the evidence log](docs/demo.gif)
+![Cupbearer — the tasting room: live verdicts, blocked downgrades, and the evidence log](landing/demo.gif)
 
 ---
 
@@ -29,6 +29,14 @@ curl http://127.0.0.1:4143/v1/chat/completions \
 ```
 
 That's it. Any OpenAI-speaking tool now works against `http://127.0.0.1:4143/v1`, with your pooled keys, failover, and the quality gate behind it.
+
+**Prefer running from source?** Zero runtime dependencies — Node 22+ is all it needs:
+
+```bash
+git clone https://github.com/cupbearer-gateway/cupbearer.git
+cd cupbearer && npm install && npm run build   # installs dashboard deps, builds the bundle into dist/
+npm start                                      # then: scripts/cli.js setup for the wizard
+```
 
 ## Connect the agents you already use
 
@@ -123,13 +131,16 @@ Built-in presets: Groq · Google Gemini (AI Studio API) · Cerebras · Mistral �
 
 ## How it's built
 
-One Node process, zero runtime dependencies (storage is `node:sqlite`, built into Node ≥ 22). Plain HTTP, real streaming, an in-process React dashboard, and 238 tests that run with `npm test` on any machine — no API keys required (the smoke test uses bundled stub providers).
+One Node process, zero runtime dependencies (storage is `node:sqlite`, built into Node ≥ 22). Plain HTTP, real streaming, an in-process React dashboard, and 254 tests that run with `npm test` on any machine — no API keys required (the smoke test uses bundled stub providers).
 
 | Path | What |
 |---|---|
 | `server/` | gateway: router, relay, health, quality gate, presets, SQLite store |
 | `scripts/cli.js` | `setup` / `serve` / `doctor` |
 | `scripts/benchmark.js` | the report generator |
+| `scripts/smoke.js` | keyless end-to-end run against bundled stub providers |
+| `scripts/toast.ps1` | Windows toast delivery for failover events (auto-managed) |
+| `scripts/make-toast.ps1` · `make-ico.ps1` | regenerate brand assets from `ui/public/logo.png` |
 | `ui/` | dashboard source (`npm run build`) |
 | `docs/` | architecture, API, operations, extending, quirks |
 
@@ -143,7 +154,7 @@ One Node process, zero runtime dependencies (storage is `node:sqlite`, built int
 
 ## Status & roadmap
 
-v0.1 — the full gateway, gate, dashboard, and benchmark are in. Next: more presets and community quirks, LLM-assisted request profiling, multimodal passthrough endpoints, Anthropic surface tool-streaming. See [CHANGELOG.md](CHANGELOG.md) for history.
+v0.2 — the failover-and-recovery overhaul: one immediate same-provider retry on transient upstream errors (`legRetries`), a 20-second fast-lane re-probe so a dropped provider comes back on its own (`reviveSoonMs`), and a restart-rotation action that provably returns everything to rotation. Per-(provider, model) rotation cursors, a model-aware dashboard, Windows toast notifications with the full seal mark. Next: more presets and community quirks, LLM-assisted request profiling, multimodal passthrough endpoints, Anthropic surface tool-streaming. See [CHANGELOG.md](CHANGELOG.md) for history.
 
 ## License
 

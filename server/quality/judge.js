@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/quirks.md → § LLM-as-judge
+// DOC: ../../docs/architecture.md → § Module map → server/quality/
 //
 // Optional LLM-as-judge. Off by default — the heuristics in evaluators.js are
 // the default quality signal, and the $0 story stays honest because of that.

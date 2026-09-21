@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/operations.md → § Background checks on healthy keys (canary) · ../docs/architecture.md → § Module map → server/canary.js
+// DOC: ../docs/operations.md → § Auto-revival & background probes · ../docs/architecture.md → § Module map → server/notify.js
 // Background canary probe of healthy keys.
 //
 // Quiet background checks on usable keys so degradation is noticed before user requests.

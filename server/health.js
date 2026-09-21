@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/architecture.md → § Module map → server/health.js
+// DOC: ../docs/architecture.md → § Module map → server/health.js · ../docs/operations.md → § Auto-revival & background probes
 
 // Failure state machine, scoped.
 //

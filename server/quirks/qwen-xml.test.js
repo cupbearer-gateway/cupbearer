@@ -1,8 +1,7 @@
 "use strict"
 
-// Ported from ~/.config/opencode/hcnapi-proxy.test.js, converted to node:test.
-// These fixtures are real on-the-wire samples from api.hcnsec.cn, including the
-// exact token-splitting pattern its SSE stream produces.
+// These fixtures are real on-the-wire samples from a Qwen3.8 upstream, including
+// the exact token-splitting pattern its SSE stream produces.
 
 const { test } = require("node:test")
 const assert = require("node:assert")
@@ -208,7 +207,7 @@ test("non-streaming envelope: tool_calls and finish_reason rewritten", () => {
 //
 // Parameter values are arbitrary strings, so every XML marker the parser looks
 // for can legitimately appear INSIDE one. Captured verbatim from
-// hcnapi/Qwen3.8-27B when asked to write a file documenting the tool-call format:
+// Qwen3.8-27B upstream when asked to write a file documenting the tool-call format:
 //
 //   <parameter=content>
 //   The tag </parameter> ends a value and <tool_call> starts a call.

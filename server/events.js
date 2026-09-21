@@ -1,5 +1,5 @@
 "use strict"
-// DOC: ../docs/architecture.md → § Module map → server/events.js · ../docs/api.md → § SSE events
+// DOC: ../docs/architecture.md → § Module map → server/events.js · ../docs/api.md → § SSE events (GET /api/events)
 
 // In-process event bus + SSE fan-out for the dashboard.
 //

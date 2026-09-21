@@ -46,17 +46,32 @@ Model names resolve in order: configured pool id → `providerId/model` → **fi
 - `GET /api/overview` — pools, providers (keys masked), quirks, stats, settings, canary status
 - `GET|POST /api/pools`, `GET|PUT|DELETE /api/pools/:id`, `GET /api/pools/:id/detail` (series + live feed)
 - `GET|POST /api/providers`, `GET|PUT|DELETE /api/providers/:id`
+- `GET /api/providers/:id/keys` — paginated key list (`?state=&q=&limit=&offset=`)
 - `POST /api/providers/:id/keys` · `POST .../keys/bulk` · `PUT|DELETE .../keys/:keyId`
 - `POST .../keys/:keyId/test` (1-token live probe) · `POST .../keys/:keyId/clear` (return to rotation)
 - `GET .../keys/:keyId/value` — the single reveal endpoint; page loads only ever see masks
 - `POST /api/providers/:id/discover` — refresh the model list from the provider's `/v1/models`
 - `GET|PUT /api/settings` — validated settings (unknown keys rejected)
-- `POST /api/rotation/restart` — clear sticky states + rotation cursors
+- `POST /api/rotation/restart` — return every key and route to rotation (sticky pulls, rate-limit cooldowns, degraded streaks — all of it) and reset rotation cursors; responds `{ok, keys, routes}` with what was cleared
 - `POST /api/revive/run` · `POST /api/canary/run` · `GET /api/canary/status`
+- `POST /api/history/clear` — wipe the request/decision log (health and counters untouched)
+- `POST /api/notify/test` — fire one test toast
 - `GET /api/feed?limit=&pool=` — newest calls
-- `GET /api/events` — SSE: `attempt`, `success`, `failure`, `gate`, `pools`, `providers`, `settings`
 
 Key values are **write-only** through this API: they go in via POST/PUT and come back only as masks. A replaced key gets a clean health slate.
+
+### SSE events (`GET /api/events`)
+
+| Event | Payload | When |
+|---|---|---|
+| `attempt` | poolId, providerId, keyId, model, attempt | before each upstream attempt |
+| `success` | poolId, providerId, keyId, model, latencyMs, tokensOut, … | a response was served |
+| `failure` | poolId, providerId, keyId, model, reason, message, state | an attempt failed and health was marked |
+| `gate` | poolId, providerId, model, mode, passed, score, threshold | a quality-gate decision (gate or shadow) |
+| `pools` / `providers` | action, id (+ details) | config mutations; `pools` also carries `rotation-restarted` with `{keys, routes}` |
+| `settings` | action, settings | settings changed, history cleared |
+| `revive` | providerId, keyId/model or keys | a probed key/route answered again and re-entered rotation |
+| `provider_failover` | poolId, providerId, key, title, message | a switch toast was emitted (also what drives desktop notifications) |
 
 ## Quirks
 
