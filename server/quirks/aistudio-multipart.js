@@ -21,6 +21,26 @@ function sanitizePart(part) {
   return cleaned
 }
 
+function isBlankText(v) {
+  return typeof v !== "string" || !v.trim()
+}
+
+function cleanedArrayContent(content) {
+  if (!Array.isArray(content)) return content
+  const kept = content.filter((block) => {
+    if (block == null) return false
+    if (typeof block === "string") return block.trim().length > 0
+    if (typeof block !== "object") return false
+    const t = block.type || ""
+    if (t === "text" || t === "input_text" || t === "output_text") {
+      return typeof block.text === "string" ? block.text.trim().length > 0 : false
+    }
+    // keep image/file/audio/video blocks as-is
+    return true
+  })
+  return kept
+}
+
 function sanitizeMessage(msg) {
   if (!msg || typeof msg !== "object") return msg
 
@@ -40,9 +60,42 @@ function sanitizeMessage(msg) {
     return result
   }
 
-  if (role === "assistant" && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
-    // Check both content and reasoning_content - both would create dual-field Parts
-    const hasContentText = typeof msg.content === "string" && msg.content.trim()
+  const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0
+
+  // Normalize array content: drop empty text blocks (they become Part{Text:""}
+  // which AIStudio2API encodes as 0 variants -> 400 'part must have exactly
+  // one content type', e.g. "content 250 part 0").
+  if (Array.isArray(msg.content)) {
+    const kept = cleanedArrayContent(msg.content)
+    if (kept.length !== msg.content.length) {
+      if (kept.length === 0 && !hasToolCalls) return null // drop empty message
+      if (kept.length === 0 && hasToolCalls) {
+        const { content: _dropped, ...rest } = msg
+        return rest // tool_calls-only, no empty text part
+      }
+      return { ...msg, content: kept }
+    }
+  }
+
+  // Empty-string / whitespace content with tool_calls: strip content so the
+  // message encodes as tool_calls-only instead of [empty-text, tool_call].
+  // Empty-string content without tool_calls: drop (it would encode as
+  // Part{Text:""} -> variants==0 -> same 400).
+  if (typeof msg.content === "string" && !msg.content.trim()) {
+    if (hasToolCalls) {
+      const { content: _dropped, ...rest } = msg
+      return rest
+    }
+    if (role === "assistant" || role === "user") return null
+    return msg
+  }
+
+  if (role === "assistant" && hasToolCalls) {
+    // Check both content and reasoning_content - both would create dual-field Parts.
+    // Content may be string or array at this point (empty cases handled above).
+    const hasContentText =
+      (typeof msg.content === "string" && msg.content.trim().length > 0) ||
+      (Array.isArray(msg.content) && msg.content.length > 0)
     const hasReasoningText = typeof msg.reasoning_content === "string" && msg.reasoning_content.trim()
     if (!hasContentText && !hasReasoningText) {
       return msg
@@ -55,7 +108,9 @@ function sanitizeMessage(msg) {
     if (hasReasoningText) {
       parts.push({ role: "assistant", content: msg.reasoning_content })
     }
-    parts.push({ role: "assistant", tool_calls: msg.tool_calls })
+    const toolOnly = { role: "assistant", tool_calls: msg.tool_calls }
+    if (msg.name) toolOnly.name = msg.name
+    parts.push(toolOnly)
     return parts
   }
 
@@ -76,6 +131,10 @@ module.exports = {
 
     for (const msg of messages) {
       const sanitized = sanitizeMessage(msg)
+      if (sanitized === null) {
+        changed = true // drop empty-text message that would 400 downstream
+        continue
+      }
       if (Array.isArray(sanitized)) {
         next.push(...sanitized)
         changed = true
