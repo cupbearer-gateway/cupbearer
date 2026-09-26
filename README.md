@@ -33,7 +33,7 @@ That's it. Any OpenAI-speaking tool now works against `http://127.0.0.1:4143/v1`
 **Prefer running from source?** Zero runtime dependencies — Node 22+ is all it needs:
 
 ```bash
-git clone https://github.com/cupbearer-gateway/cupbearer.git
+git clone https://github.com/abdullahaamuda-code/cupbearer.git
 cd cupbearer && npm --prefix ui install && npm --prefix ui run build   # dashboard deps live in ui/; the bundle lands in dist/
 npm start                                      # then: scripts/cli.js setup for the wizard
 ```
