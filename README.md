@@ -156,6 +156,12 @@ One Node process, zero runtime dependencies (storage is `node:sqlite`, built int
 
 v0.2 — the failover-and-recovery overhaul: one immediate same-provider retry on transient upstream errors (`legRetries`), a 20-second fast-lane re-probe so a dropped provider comes back on its own (`reviveSoonMs`), and a restart-rotation action that provably returns everything to rotation. Per-(provider, model) rotation cursors, a model-aware dashboard, Windows toast notifications with the full seal mark. Next: more presets and community quirks, LLM-assisted request profiling, multimodal passthrough endpoints, Anthropic surface tool-streaming. See [CHANGELOG.md](CHANGELOG.md) for history.
 
+## Why
+
+Every gateway can fail over when a provider errors. Cupbearer also refuses to hand
+your task to a model that *answers but can't do the job* — because the failure that
+burns you is not the 500, it's the confident garbage that reaches your editor.
+
 ## License
 
 [MIT](LICENSE)
