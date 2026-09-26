@@ -158,4 +158,7 @@ v0.2 — the failover-and-recovery overhaul: one immediate same-provider retry o
 
 ## License
 
-[MIT](LICENSE) — © 2026 Cupbearer contributors
+[MIT](LICENSE)
+---
+
+Built by Abdullah A-Amuda.
